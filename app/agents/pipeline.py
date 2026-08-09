@@ -16,6 +16,7 @@ from app.models import (
     SalaryData,
     TagCount,
 )
+from app.rag.vector_store import index_jobs, unindexed_jobs
 from app.services.persistence import (
     complete_scan,
     start_scan,
@@ -42,6 +43,7 @@ class PipelineState:
     reviews: list[dict] = field(default_factory=list)
     salaries: list[dict] = field(default_factory=list)
     top_tags: list[dict] = field(default_factory=list)
+    chunks_indexed: int = 0
 
 
 async def scrape_jobs(state: PipelineState) -> dict:
@@ -247,6 +249,25 @@ async def persist_results(state: PipelineState) -> dict:
     }
 
 
+async def index_jobs_for_rag(state: PipelineState) -> dict:
+    """Embed newly persisted jobs so they are searchable.
+
+    Runs after persistence and swallows its own errors: a failed embedding call
+    must not fail a scan whose jobs are already safely stored.
+    """
+    if state.status == "failed":
+        return {"chunks_indexed": 0}
+
+    try:
+        async with async_session() as session:
+            jobs = await unindexed_jobs(session, limit=100)
+            chunks = await index_jobs(session, jobs)
+            await session.commit()
+        return {"chunks_indexed": chunks}
+    except Exception:
+        return {"chunks_indexed": 0}
+
+
 workflow = StateGraph(PipelineState)
 
 workflow.add_node("scrape", scrape_jobs)
@@ -254,6 +275,7 @@ workflow.add_node("extract", extract_companies)
 workflow.add_node("research", research_companies)
 workflow.add_node("cover_letters", generate_cover_letters)
 workflow.add_node("persist", persist_results)
+workflow.add_node("index", index_jobs_for_rag)
 
 workflow.set_entry_point("scrape")
 workflow.add_conditional_edges(
@@ -267,7 +289,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("extract", "research")
 workflow.add_edge("research", "cover_letters")
 workflow.add_edge("cover_letters", "persist")
-workflow.add_edge("persist", END)
+workflow.add_edge("persist", "index")
+workflow.add_edge("index", END)
 
 graph = workflow.compile()
 

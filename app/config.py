@@ -98,6 +98,18 @@ class Settings(BaseSettings):
     # Scraping
     headless_browser: bool = True
 
+    # RAG
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536
+    rag_top_k: int = 5
+    # Candidates pulled from each retrieval arm before fusion. Wider than
+    # top_k so a chunk only one arm ranks highly can still surface.
+    rag_candidate_k: int = 25
+    rag_answer_model: str = "gpt-4o-mini"
+
+    # Evaluation
+    eval_llm_model: str = "gpt-4o-mini"
+
     # CORS
     cors_origins: list[str] = ["*"]
 

@@ -33,14 +33,12 @@ scout/
 │   │   ├── scraper.py         # Job board scraping
 │   │   └── pipeline.py        # LangGraph workflow
 │   ├── rag/
+│   │   ├── chunking.py        # Job posting → self-contained chunks
 │   │   ├── embeddings.py      # Embedding generation
-│   │   ├── vector_store.py    # pgvector operations
-│   │   ├── retriever.py       # Hybrid search
+│   │   ├── vector_store.py    # pgvector storage + similarity search
+│   │   ├── retriever.py       # Hybrid search (dense + BM25, RRF fusion)
+│   │   ├── qa.py              # Grounded question answering
 │   │   └── matcher.py         # Job-candidate matching
-│   ├── prompts/
-│   │   ├── cover_letter.py    # Versioned prompts
-│   │   ├── research.py
-│   │   └── matching.py
 │   ├── api/
 │   │   └── routes.py          # API endpoints
 │   ├── config.py              # Settings
@@ -48,10 +46,14 @@ scout/
 │   └── main.py                # FastAPI app
 ├── tests/
 │   ├── eval/
-│   │   ├── judge.py           # LLM-as-judge
-│   │   └── fixtures/          # Test data
+│   │   ├── harness.py         # Ragas evaluation harness
+│   │   ├── ragas_compat.py    # Import shim (ragas#2753)
+│   │   ├── test_rag_ragas.py  # Quality gate (opt-in)
+│   │   └── fixtures/          # Eval corpus + golden questions
 │   └── ...
-├── docker-compose.yml         # PostgreSQL
+├── scripts/
+│   └── eval.py                # Run the evaluation, print a report
+├── docker-compose.yml         # PostgreSQL + pgvector
 └── pyproject.toml             # Dependencies
 ```
 
@@ -93,6 +95,10 @@ uv run uvicorn app.main:app --reload
 | GET | `/health` | API status |
 | GET | `/scan?query=python&location=remote&skills=Python,FastAPI` | Scan job boards + research companies + generate cover letters |
 | GET | `/cover-letter?job_title=X&company_name=Y&skills=Z` | Generate a single cover letter |
+| POST | `/api/rag/index` | Embed job postings into the vector store |
+| GET | `/api/rag/search?q=...&top_k=5` | Retrieve job-posting chunks relevant to a query |
+| POST | `/api/rag/ask` | Answer a question grounded in the indexed postings |
+| POST | `/api/rag/match` | Rank indexed jobs against a skill profile |
 
 ### Example Usage
 
@@ -102,7 +108,35 @@ curl "http://localhost:8000/scan?query=python+developer&location=remote&skills=P
 
 # Generate a single cover letter
 curl "http://localhost:8000/cover-letter?job_title=Python+Developer&company_name=Google&skills=Python,FastAPI,React"
+
+# Index scraped jobs for retrieval (the /scan pipeline also does this automatically)
+curl -X POST http://localhost:8000/api/rag/index -H 'Content-Type: application/json' -d '{"limit": 100}'
+
+# Semantic + keyword search over indexed postings
+curl "http://localhost:8000/api/rag/search?q=rust+systems+role+in+europe&top_k=5"
+
+# Ask a grounded question
+curl -X POST http://localhost:8000/api/rag/ask -H 'Content-Type: application/json' \
+  -d '{"question": "Which roles are remote and do not require Kubernetes?"}'
+
+# Rank jobs against your skills
+curl -X POST http://localhost:8000/api/rag/match -H 'Content-Type: application/json' \
+  -d '{"skills": ["python", "postgresql", "fastapi"], "role": "backend engineer"}'
 ```
+
+## RAG
+
+Job postings are chunked (each chunk keeps a title/company/location/salary header so
+it stands alone), embedded with `text-embedding-3-small`, and stored in `job_chunks`.
+
+Retrieval is hybrid. A dense arm searches pgvector by cosine distance; a sparse arm
+runs BM25 over chunks matching any query term. The two ranked lists are combined with
+reciprocal rank fusion, because cosine similarity and BM25 scores are not on comparable
+scales. Dense alone misses exact tokens (a query for "Rust" otherwise pulls in Go
+postings); BM25 alone misses paraphrase.
+
+`/api/rag/ask` answers strictly from retrieved chunks and refuses when they do not
+contain the answer — that constraint is what makes the faithfulness metric meaningful.
 
 ## Configuration
 
@@ -132,15 +166,51 @@ EMAIL_RECIPIENT=your-email@gmail.com
 ### Running Tests
 
 ```bash
-# Unit tests
+# Unit tests — fast, no network, no API key needed
 uv run pytest
 
 # With coverage
 uv run pytest --cov=app
-
-# Evaluation tests
-uv run python scripts/eval.py
 ```
+
+### Evaluation
+
+The RAG pipeline is scored with [ragas](https://github.com/explodinggradients/ragas)
+against a fixed corpus in `tests/eval/fixtures/`. Both entry points make real OpenAI
+calls (embeddings, one answer per question, several judge calls per metric), so they
+are opt-in and excluded from the default test run.
+
+```bash
+# Report: per-metric scores against their floors, plus every Q/A pair
+uv run python scripts/eval.py
+uv run python scripts/eval.py --top-k 8 --json results.json
+
+# Same evaluation as a pass/fail quality gate
+RUN_EVAL=1 uv run pytest tests/eval -v
+```
+
+Metrics: **faithfulness** (is the answer grounded in the retrieved context?),
+**answer relevancy**, **context precision** (are relevant chunks ranked highly?) and
+**context recall** (did retrieval find everything the reference answer needs?).
+Alongside them is a deterministic, judge-free **retrieval hit rate** — the fraction of
+questions where every expected posting made it into the context. If that drops, the
+LLM-judged numbers above it are measuring a broken retriever.
+
+Thresholds live in `THRESHOLDS` in `tests/eval/harness.py`. They are regression floors,
+not targets.
+
+**On reading the scores:** repeated runs of identical code over the same corpus varied
+by up to ~0.15 (faithfulness landed anywhere from 0.773 to 0.909). An LLM judge over 11
+questions is noisy even at temperature 0, so a single run is not a precise measurement
+and small score movements are not signal. The floors are set well below the lowest
+observed value for that reason. Making this a trustworthy gate means growing the
+question set in `tests/eval/fixtures/questions.json` to shrink the standard error —
+raising the floors alone just produces a flaky suite.
+
+> **Note:** ragas 0.4.x cannot be imported alongside langchain-community 0.4.x
+> ([ragas#2753](https://github.com/explodinggradients/ragas/issues/2753)).
+> `tests/eval/ragas_compat.py` shims the deleted module and can be deleted once
+> upstream makes that import lazy.
 
 ### Code Quality
 

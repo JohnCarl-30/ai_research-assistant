@@ -8,19 +8,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agents.pipeline import run_pipeline
+from app.agents.scraper import ScrapedJob
 from app.database import get_db
 from app.models import Company, CompanyReview, Job, SalaryData, TagCount
 from app.schemas import (
+    AskRequest,
+    AskResponse,
     CompanyResponse,
+    FirecrawlRequest,
+    FirecrawlResponse,
+    IndexRequest,
+    IndexResponse,
+    JobMatchResponse,
     JobPatchRequest,
     JobResponse,
+    MatchRequest,
+    MatchResponse,
     PaginatedCompanies,
     PaginatedJobs,
     PaginatedTags,
+    RetrievedChunkResponse,
     ReviewResponse,
     SalaryResponse,
     ScanRequest,
     ScanResponse,
+    SearchResponse,
     TagResponse,
     normalize_location,
 )
@@ -260,3 +272,133 @@ async def cover_letter(
         user_skills=user_skills,
     )
     return result
+
+
+def _chunk_response(item) -> RetrievedChunkResponse:
+    return RetrievedChunkResponse(
+        job_id=item.chunk.job_id,
+        job_title=item.chunk.job_title,
+        company_name=item.chunk.company_name,
+        job_url=item.chunk.job_url,
+        section=item.chunk.section,
+        content=item.chunk.content,
+        score=item.score,
+        dense_rank=item.dense_rank,
+        sparse_rank=item.sparse_rank,
+    )
+
+
+@router.post("/rag/index", response_model=IndexResponse)
+async def rag_index(req: IndexRequest, db: AsyncSession = Depends(get_db)):
+    """Embed job postings into the vector store."""
+    from app.rag.vector_store import index_jobs, unindexed_jobs
+
+    if req.reindex_all:
+        result = await db.execute(
+            select(Job).options(selectinload(Job.company)).limit(req.limit)
+        )
+        jobs = list(result.scalars().all())
+    else:
+        jobs = await unindexed_jobs(db, limit=req.limit)
+
+    chunks = await index_jobs(db, jobs)
+    return IndexResponse(jobs_indexed=len(jobs), chunks_written=chunks)
+
+
+@router.get("/rag/search", response_model=SearchResponse)
+async def rag_search(
+    q: str = Query(..., min_length=1),
+    top_k: int = Query(5, ge=1, le=50),
+    hybrid: bool = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve job-posting chunks relevant to a query."""
+    from app.rag.retriever import retrieve
+
+    results = await retrieve(db, q, top_k=top_k, hybrid=hybrid)
+    return SearchResponse(query=q, results=[_chunk_response(r) for r in results])
+
+
+@router.post("/rag/ask", response_model=AskResponse)
+async def rag_ask(req: AskRequest, db: AsyncSession = Depends(get_db)):
+    """Answer a question grounded in the indexed job postings."""
+    from app.rag.qa import answer_job_question
+
+    result = await answer_job_question(db, req.question, top_k=req.top_k, hybrid=req.hybrid)
+    return AskResponse(
+        question=result.question,
+        answer=result.answer,
+        contexts=result.contexts,
+        sources=[_chunk_response(r) for r in result.retrieved],
+    )
+
+
+@router.post("/rag/match", response_model=MatchResponse)
+async def rag_match(req: MatchRequest, db: AsyncSession = Depends(get_db)):
+    """Rank indexed jobs against a candidate's skills."""
+    from app.rag.matcher import match_jobs
+
+    matches = await match_jobs(db, req.skills, role=req.role, limit=req.limit)
+    return MatchResponse(
+        matches=[
+            JobMatchResponse(
+                job_id=m.job_id,
+                title=m.title,
+                company_name=m.company_name,
+                url=m.url,
+                score=m.score,
+                matched_skills=m.matched_skills,
+                missing_skills=m.missing_skills,
+            )
+            for m in matches
+        ]
+    )
+
+
+@router.post("/scrape-firecrawl", response_model=FirecrawlResponse)
+async def scrape_firecrawl(req: FirecrawlRequest):
+    """Scrape job boards using Firecrawl LangGraph pipeline.
+
+    Flow: search -> scrape -> parse -> persist -> index -> END
+
+    To execute, POST with search_results and scraped_pages from Firecrawl MCP.
+    """
+    from app.agents.firecrawl_scraper import run_firecrawl_pipeline, build_search_queries
+
+    # If no pre-fetched data, return queries for the caller to execute
+    if not req.search_results and not req.scraped_pages:
+        queries = build_search_queries(
+            role=req.role,
+            location=req.location,
+            remote_only=req.remote_only,
+        )
+        return FirecrawlResponse(
+            role=req.role,
+            location=req.location,
+            queries=queries,
+            sources=["greenhouse.io", "ashbyhq.com", "lever.co"],
+            status="ready",
+            message="Execute these searches with Firecrawl MCP, then POST results back",
+        )
+
+    # Run the full pipeline with pre-fetched data
+    result = await run_firecrawl_pipeline(
+        role=req.role,
+        location=req.location,
+        remote_only=req.remote_only,
+        max_results=req.max_results,
+        search_results=req.search_results,
+        scraped_pages=req.scraped_pages,
+    )
+
+    return FirecrawlResponse(
+        role=req.role,
+        location=req.location,
+        queries=[],
+        sources=["greenhouse.io", "ashbyhq.com", "lever.co"],
+        status=result.get("status", "completed"),
+        message=f"Found {result.get('jobs_found', 0)} jobs, indexed {result.get('new_jobs', 0)} new",
+        scan_id=result.get("scan_id"),
+        jobs_found=result.get("jobs_found", 0),
+        new_jobs=result.get("new_jobs", 0),
+    )

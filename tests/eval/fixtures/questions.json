@@ -1,0 +1,63 @@
+[
+  {
+    "question": "How many journal entries per day does the Ledgerline ledger service process?",
+    "reference": "About 40 million journal entries per day.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "Which roles are remote and open to candidates in the EU?",
+    "reference": "The Platform Engineer and Rust Systems Engineer roles at Northwind Systems are remote, EU only.",
+    "expected_job_urls": [
+      "https://example.com/jobs/northwind-platform",
+      "https://example.com/jobs/northwind-rust"
+    ]
+  },
+  {
+    "question": "Does the Ledgerline backend role require Kubernetes experience?",
+    "reference": "No. The posting states Kubernetes experience is not required; their services run on ECS Fargate.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "What is the salary range for the machine learning engineer role, and where is it based?",
+    "reference": "$185,000 to $225,000, based in Seattle, WA, hybrid with 3 days onsite.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "Which job involves rewriting a service in Rust, and what is it replacing?",
+    "reference": "The Rust Systems Engineer role at Northwind Systems. It is a greenfield rewrite of the edge proxy, replacing a Go service that outgrew its garbage collector.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-rust"]
+  },
+  {
+    "question": "Is a PhD required for the ranking role at Trailhead?",
+    "reference": "No. The posting explicitly says a PhD is not required and is not weighted in hiring.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "What data stack does the Ledgerline data engineering role use?",
+    "reference": "dbt, Airflow for orchestration, and Snowflake as the warehouse, fed by change-data-capture streams such as Debezium.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-data"]
+  },
+  {
+    "question": "How often is on-call for the Northwind platform role, and is it paid?",
+    "reference": "One week in six, and it is compensated separately.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-platform"]
+  },
+  {
+    "question": "Which roles at Trailhead are hybrid, and how many days onsite?",
+    "reference": "Both the Machine Learning Engineer and Frontend Engineer roles at Trailhead are hybrid in Seattle with 3 days onsite.",
+    "expected_job_urls": [
+      "https://example.com/jobs/trailhead-ml",
+      "https://example.com/jobs/trailhead-frontend"
+    ]
+  },
+  {
+    "question": "What accessibility standard does the frontend role hold itself to?",
+    "reference": "WCAG 2.1 AA, which is part of every ticket.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-frontend"]
+  },
+  {
+    "question": "Which company offers visa sponsorship for relocation to Japan?",
+    "reference": "None of the indexed job postings mention visa sponsorship or Japan, so this cannot be answered from the postings.",
+    "expected_job_urls": []
+  }
+]

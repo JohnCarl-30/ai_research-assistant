@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector build of Postgres 16 — the stock postgres image has no `vector`
+    # extension, so app.database.init_db() cannot create the embedding column.
+    image: pgvector/pgvector:pg16
     container_name: scout-db
     environment:
       POSTGRES_USER: postgres

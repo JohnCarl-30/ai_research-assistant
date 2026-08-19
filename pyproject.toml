@@ -7,11 +7,15 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
-    "langchain>=0.1.0",
-    "langchain-openai>=0.0.5",
-    "langgraph>=0.0.20",
-    "langsmith>=0.0.83",
-    "openai>=1.10.0",
+    # Upper bounds are deliberate. These are the versions the suite is verified
+    # against; unbounded ranges previously let an unrelated `uv add` walk the
+    # whole LLM stack across major versions as a side effect.
+    "langchain>=1.3.14,<2",
+    "langchain-openai>=1.4.1,<2",
+    "langchain-community>=0.4.2,<0.5",
+    "langgraph>=1.2.9,<2",
+    "langsmith>=0.10.10,<1",
+    "openai>=2.48.0,<3",
     "httpx>=0.26.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.5.0",
@@ -21,6 +25,11 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "lxml>=5.1.0",
     "playwright>=1.41.0",
+    # ragas 0.4.x cannot be imported alongside langchain-community 0.4.x without
+    # the shim in tests/eval/ragas_compat.py — see explodinggradients/ragas#2753.
+    "ragas>=0.4.3,<0.5",
+    "pgvector>=0.5.0,<0.6",
+    "rank-bm25>=0.2.2,<0.3",
 ]
 
 [project.optional-dependencies]
@@ -48,3 +57,8 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# tests/eval makes real OpenAI calls and is opt-in via RUN_EVAL=1.
+testpaths = ["tests"]
+markers = [
+    "eval: LLM-judged quality evaluation; requires RUN_EVAL=1 and an OpenAI key",
+]

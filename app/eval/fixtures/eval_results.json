@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-08-20T05:13:10.304366",
+  "timestamp": "2026-08-20T05:28:30.775058",
   "results": [
     {
       "agent": "cover_letter",
       "passed": true,
       "scores": {
-        "overall": 0.9333333333333332
+        "overall": 0.9666666666666667
       },
       "failures": []
     },
@@ -19,26 +19,11 @@
     },
     {
       "agent": "matching",
-      "passed": false,
+      "passed": true,
       "scores": {
-        "overall": 0.5
+        "overall": 0.7533333333333334
       },
-      "failures": [
-        {
-          "case": "Senior Python developer with FastAPI and React exp",
-          "error": "unsupported operand type(s) for +: 'int' and 'str'"
-        },
-        {
-          "case": "Full stack engineer with React and Node.js",
-          "score": 0.5,
-          "threshold": 0.6,
-          "reasoning": "The match correctly identified that the candidate lacks the specific skills of React and Node.js required for the job. However, it did not recognize the candidate's experience with Django and jQuery as potentially transferable skills for a full stack role, which could be relevant for learning React and Node.js. The recommendation is not appropriate as it does not suggest any potential for skill development or training. The reasoning is clear in terms of skill identification but lacks depth in exploring the candidate's potential to transition into the required role."
-        },
-        {
-          "case": "ML engineer with TensorFlow and production ML expe",
-          "error": "unsupported operand type(s) for +: 'int' and 'str'"
-        }
-      ]
+      "failures": []
     }
   ]
 }

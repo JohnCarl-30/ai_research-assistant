@@ -37,6 +37,21 @@ class TestEvalDatasets:
         assert "Python" in cases[0].candidate_skills
         assert cases[0].expected_match_range == (0.7, 0.95)
 
+        # Every case must carry a postable job, because the regression test
+        # indexes it and runs the real matcher over it.
+        for case in cases:
+            assert case.job_title
+            assert case.job_description
+            assert case.job_requirements
+
+        # matched/missing partition the candidate's own skills — see MatchingCase.
+        for case in cases:
+            expected = {s.lower() for s in case.expected_matched_skills}
+            expected |= {s.lower() for s in case.expected_missing_skills}
+            assert expected == {s.lower() for s in case.candidate_skills}, (
+                f"{case.job_title}: expected matched+missing must partition candidate_skills"
+            )
+
 
 class TestEvalJudge:
     """Test LLM-as-judge scoring."""

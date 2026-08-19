@@ -33,8 +33,21 @@ class ResearchCase:
 
 @dataclass
 class MatchingCase:
-    """Golden test case for job-candidate matching."""
+    """Golden test case for job-candidate matching.
+
+    The posting fields are real input, not decoration: the case is evaluated by
+    indexing this posting and running `app.rag.matcher.match_jobs` against it,
+    so the matcher has to retrieve it and read its own evidence out of it.
+
+    Note the direction of `expected_matched_skills` / `expected_missing_skills`.
+    They partition `candidate_skills` by whether the *posting* evidences them —
+    which is what the matcher reports. They are not the job's requirements that
+    the candidate lacks; an earlier version of this dataset assumed the latter,
+    and nothing caught it because the matcher was never actually called.
+    """
     candidate_skills: list[str]
+    job_title: str
+    job_description: str
     job_requirements: str
     expected_match_range: tuple[float, float] = (0.3, 0.9)
     expected_matched_skills: list[str] = field(default_factory=list)
@@ -95,24 +108,54 @@ def load_research_cases() -> list[ResearchCase]:
 def load_matching_cases() -> list[MatchingCase]:
     """Load golden test cases for job-candidate matching."""
     return [
+        # Strong fit: three of four skills are evidenced in the posting.
         MatchingCase(
             candidate_skills=["Python", "FastAPI", "React", "PostgreSQL"],
-            job_requirements="Senior Python developer with FastAPI and React experience",
+            job_title="Senior Python Developer",
+            job_description=(
+                "We are building a customer-facing analytics product. The team ships "
+                "a FastAPI backend and a React frontend, and owns both in production."
+            ),
+            job_requirements=(
+                "Strong Python. Production experience with FastAPI and React. "
+                "Comfortable owning features end to end."
+            ),
             expected_match_range=(0.7, 0.95),
-            expected_matched_skills=["Python", "FastAPI", "React"],
+            expected_matched_skills=["FastAPI", "Python", "React"],
+            expected_missing_skills=["PostgreSQL"],
         ),
+        # No fit, and a trap for `_mentions`. None of the candidate's skills are
+        # in this posting, but "MongoDB" contains "go" as a substring. If the
+        # whole-token guard in the matcher regresses to a plain `in` check, "Go"
+        # matches here and this case fails — which is the point of it.
         MatchingCase(
-            candidate_skills=["Python", "Django", "jQuery"],
-            job_requirements="Full stack engineer with React and Node.js",
-            expected_match_range=(0.2, 0.5),
-            expected_missing_skills=["React", "Node.js"],
+            candidate_skills=["Go", "Django", "jQuery"],
+            job_title="Full Stack Engineer",
+            job_description=(
+                "Our product is a React single-page app backed by Node.js services "
+                "and MongoDB."
+            ),
+            job_requirements=(
+                "Solid React and Node.js. Familiarity with MongoDB. TypeScript preferred."
+            ),
+            expected_match_range=(0.0, 0.2),
+            expected_matched_skills=[],
+            expected_missing_skills=["Django", "Go", "jQuery"],
         ),
+        # Partial fit: the shared language is evidenced, the frameworks are not.
         MatchingCase(
             candidate_skills=["Python", "PyTorch", "LangChain"],
-            job_requirements="ML engineer with TensorFlow and production ML experience",
+            job_title="Machine Learning Engineer",
+            job_description=(
+                "You will take ranking models from notebook to production, serving "
+                "traffic behind our search bar."
+            ),
+            job_requirements=(
+                "Python. Production ML experience. TensorFlow in our serving stack."
+            ),
             expected_match_range=(0.3, 0.6),
             expected_matched_skills=["Python"],
-            expected_missing_skills=["TensorFlow"],
+            expected_missing_skills=["LangChain", "PyTorch"],
         ),
     ]
 

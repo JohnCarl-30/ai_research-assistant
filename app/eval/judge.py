@@ -155,21 +155,32 @@ async def judge_matching(
     job_requirements: str,
 ) -> ScoreResult:
     """Evaluate job-candidate matching quality using LLM judge."""
-    system_prompt = """You are a senior technical recruiter evaluating job matching quality.
+    # The rubric is deliberately narrow. Scout's matcher retrieves postings and
+    # reports which of the candidate's skills the posting evidences — it does
+    # not infer transferable skills, write a recommendation, or explain itself.
+    # An earlier rubric scored all three, so every run lost marks for output the
+    # matcher is not designed to produce and the floor could never be met.
+    system_prompt = """You are a senior technical recruiter evaluating a job matching system.
 
-Score the match on these criteria (0-1 each):
-1. SKILL_IDENTIFICATION: Did it correctly identify matched/missing skills?
-2. TRANSFERABLE_SKILLS: Did it recognize adjacent experience?
-3. RECOMMENDATION: Is the recommendation appropriate?
-4. REASONING: Is the explanation clear and actionable?
+The system takes a candidate's skill list, retrieves job postings, and for each
+posting reports which of those skills the posting evidences, which it does not,
+a match_score (the fraction of the candidate's skills evidenced), and the rank
+it gave that posting. It does not make recommendations — do not penalise it for
+the absence of one.
+
+Score on these criteria (0-1 each):
+1. SKILL_IDENTIFICATION: Given the posting, are matched_skills and
+   missing_skills correct? Penalise skills claimed as matched that the posting
+   never mentions, and skills it does mention that were reported missing.
+2. SCORE_CALIBRATION: Does match_score reflect the actual overlap?
+3. RANKING: Is this posting's rank defensible for this candidate?
 
 Output JSON:
 {
     "score": <weighted_average 0-1>,
     "skill_identification": <0-1>,
-    "transferable_skills": <0-1>,
-    "recommendation": <0-1>,
-    "reasoning_quality": <0-1>,
+    "score_calibration": <0-1>,
+    "ranking": <0-1>,
     "reasoning": "<brief explanation>"
 }"""
 
@@ -190,8 +201,7 @@ Score this matching result and provide detailed feedback."""
         reasoning=result.get("reasoning", ""),
         details={
             "skill_identification": result.get("skill_identification", 0.5),
-            "transferable_skills": result.get("transferable_skills", 0.5),
-            "recommendation": result.get("recommendation", 0.5),
-            "reasoning_quality": result.get("reasoning_quality", 0.5),
+            "score_calibration": result.get("score_calibration", 0.5),
+            "ranking": result.get("ranking", 0.5),
         },
     )

@@ -189,6 +189,26 @@ uv run python scripts/eval.py --top-k 8 --json results.json
 RUN_EVAL=1 uv run pytest tests/eval -v
 ```
 
+The gate has two tiers, split by cost rather than by importance:
+
+```bash
+# Cheap tier (~16s): retrieval only. Embeds the corpus and one vector per
+# question, then stops — no answer generation, no judge. This catches the
+# regression that matters most, because if retrieval stops finding the right
+# postings then every judged metric downstream is scoring a broken retriever.
+uv run python scripts/eval_gate.py --retrieval-only
+
+# Full tier: agent regressions plus the four judged RAG metrics.
+uv run python scripts/eval_gate.py --ragas
+```
+
+**Both tiers are local, pre-merge steps. CI does not run them and no OpenAI key
+is configured there.** Every tier calls OpenAI — even the cheap one embeds — so
+running them in CI would bill real money on each push, in a public repo where
+anyone can open a pull request. CI runs the offline unit suite only, which needs
+no key: `tests/conftest.py` defaults a placeholder so collection succeeds, and
+`tests/eval` stays behind its `RUN_EVAL` guard.
+
 Metrics: **faithfulness** (is the answer grounded in the retrieved context?),
 **answer relevancy**, **context precision** (are relevant chunks ranked highly?) and
 **context recall** (did retrieval find everything the reference answer needs?).

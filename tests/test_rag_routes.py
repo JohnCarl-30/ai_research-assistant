@@ -135,7 +135,12 @@ class TestAskRoute:
         assert body["contexts"]
         assert body["sources"]
 
-    async def test_refuses_when_nothing_is_indexed(self, client, fake_llm):
+    # stub_embeddings is required even though nothing is indexed. Every other
+    # test in this class gets it transitively via `seeded`; this one takes no
+    # corpus, so without it the query embedding hits the real OpenAI API — a
+    # billed network call from a test whose whole point is that it stays local.
+    # It passed anyway for as long as a developer had a working key in .env.
+    async def test_refuses_when_nothing_is_indexed(self, client, fake_llm, stub_embeddings):
         response = await client.post("/api/rag/ask", json={"question": "Who needs Rust?"})
 
         assert response.status_code == 200

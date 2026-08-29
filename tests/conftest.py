@@ -1,12 +1,27 @@
 import asyncio
+import os
 from collections.abc import AsyncGenerator
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# Settings requires openai_api_key, so importing anything under app/ fails
+# without one and collection dies in this file before a single test runs. The
+# unit suite makes no network calls, so it needs the setting to be *present*,
+# not valid. Default a placeholder rather than requiring a key.
+#
+# setdefault, not assignment: a real key in the environment still wins, which
+# matters for the opt-in eval suite. And this must run before the app imports
+# below — do not let an import sorter move it.
+os.environ.setdefault("OPENAI_API_KEY", "unit-tests-make-no-openai-calls")
 
-from app.database import Base, get_db
-from app.main import app
+import pytest  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture(scope="session")

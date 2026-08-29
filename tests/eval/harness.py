@@ -47,6 +47,7 @@ from app.config import get_settings
 from app.database import Base
 from app.models import Company, Job
 from app.rag.qa import answer_job_question
+from app.rag.retriever import retrieve
 from app.rag.vector_store import index_jobs
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -82,6 +83,12 @@ THRESHOLDS = {
     "llm_context_precision_with_reference": 0.76,
     "context_recall": 0.88,
 }
+
+# The judge-free floor, gated separately by `evaluate_retrieval`. Read 100% on
+# all three calibration runs over 38 grounded questions; 0.95 leaves room for a
+# single case to drift. Unlike the floors above this one is not judge-dependent,
+# so it does not need re-measuring when the judge model changes.
+RETRIEVAL_FLOOR = 0.95
 
 
 @dataclass
@@ -219,6 +226,49 @@ def retrieval_hit_rate(cases: list[EvalCase]) -> float | None:
         return None
     hits = sum(set(c.expected_job_urls).issubset(set(c.retrieved_job_urls)) for c in grounded)
     return hits / len(grounded)
+
+
+async def evaluate_retrieval(top_k: int | None = None) -> dict:
+    """Score retrieval alone: no answer generation, no judge.
+
+    This is the cheap half of the gate. It embeds the corpus and one vector per
+    question and stops there — no `answer_job_question` call, no ragas — which
+    is roughly two orders of magnitude cheaper than `evaluate_rag` because the
+    cost of that function is dominated by 41 answer generations and four judged
+    metrics over each of them.
+
+    What it buys is the check that catches the most damaging class of
+    regression. If retrieval stops finding the right postings, every LLM-scored
+    metric downstream is measuring a broken retriever, and they measure it
+    expensively. Run this on every change; run `evaluate_rag` on a schedule.
+    """
+    settings = get_settings()
+    top_k = top_k or settings.rag_top_k
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            chunks = await build_corpus(session)
+            cases = load_cases()
+            for case in cases:
+                retrieved = await retrieve(session, case.question, top_k=top_k)
+                case.retrieved_job_urls = list(
+                    dict.fromkeys(item.chunk.job_url for item in retrieved)
+                )
+    finally:
+        await engine.dispose()
+
+    return {
+        "chunks_indexed": chunks,
+        "top_k": top_k,
+        "cases": cases,
+        "retrieval_hit_rate": retrieval_hit_rate(cases),
+        "retrieval_floor": RETRIEVAL_FLOOR,
+    }
 
 
 async def evaluate_rag(top_k: int | None = None) -> dict:

@@ -2,15 +2,22 @@
 
 Runs regression tests and blocks deploy if scores drop below thresholds.
 
+The gate has two tiers, because they differ in cost by orders of magnitude:
+
+    # Cheap tier: retrieval only. Embeddings and nothing else — no answer
+    # generation, no LLM judge. Fast enough to run on every change.
+    python scripts/eval_gate.py --retrieval-only
+
+    # Full tier: agent regressions plus the judged RAG metrics. Generates an
+    # answer per question and judges each on four metrics. Run on a schedule.
+    python scripts/eval_gate.py --ragas
+
 Usage:
     # Run all evals
     python scripts/eval_gate.py
 
     # Run specific agent eval
     python scripts/eval_gate.py --agent cover_letter
-
-    # Run with RAGAS eval
-    python scripts/eval_gate.py --ragas
 
     # Output JSON for CI
     python scripts/eval_gate.py --json
@@ -24,8 +31,17 @@ import sys
 
 async def main():
     parser = argparse.ArgumentParser(description="Scout eval gate")
-    parser.add_argument("--agent", choices=["cover_letter", "research", "matching"], help="Specific agent to test")
+    parser.add_argument(
+        "--agent",
+        choices=["cover_letter", "research", "matching"],
+        help="Specific agent to test",
+    )
     parser.add_argument("--ragas", action="store_true", help="Also run RAGAS eval")
+    parser.add_argument(
+        "--retrieval-only",
+        action="store_true",
+        help="Cheap tier: gate retrieval only, skipping every LLM-judged check",
+    )
     parser.add_argument("--json", action="store_true", help="Output JSON for CI")
     parser.add_argument("--threshold", type=float, help="Override threshold for all metrics")
     args = parser.parse_args()
@@ -33,8 +49,49 @@ async def main():
     results = []
     all_passed = True
 
+    # The cheap tier returns early on purpose. The agent regressions below judge
+    # every case with an LLM, so running them would defeat the point of the flag.
+    if args.retrieval_only:
+        print("Running retrieval-only evaluation...", file=sys.stderr)
+        from tests.eval.harness import evaluate_retrieval
+
+        report = await evaluate_retrieval()
+        hit_rate = report["retrieval_hit_rate"]
+        floor = report["retrieval_floor"]
+        passed = hit_rate is not None and hit_rate >= floor
+
+        failures = []
+        if hit_rate is None:
+            failures.append({"metric": "retrieval_hit_rate", "reason": "no grounded questions"})
+        elif not passed:
+            failures.append(
+                {"metric": "retrieval_hit_rate", "score": hit_rate, "threshold": floor}
+            )
+
+        payload = {
+            "passed": passed,
+            "results": [
+                {
+                    "agent": "retrieval",
+                    "passed": passed,
+                    "scores": {
+                        "retrieval_hit_rate": hit_rate,
+                        "chunks_indexed": report["chunks_indexed"],
+                    },
+                    "failures": failures,
+                }
+            ],
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            status = "PASSED" if passed else "FAILED"
+            rate = "n/a" if hit_rate is None else f"{hit_rate:.1%}"
+            print(f"retrieval: {status} — hit rate {rate} (floor {floor:.0%})")
+        sys.exit(0 if passed else 1)
+
     # Run regression tests
-    from app.eval.regression import run_regression_test, check_eval_gate
+    from app.eval.regression import check_eval_gate, run_regression_test
 
     print("Running regression tests...", file=sys.stderr)
     regression_results = await run_regression_test(args.agent)
@@ -116,7 +173,7 @@ async def main():
             print(f"  Scores: {scores}")
 
             if failures:
-                print(f"  Failures:")
+                print("  Failures:")
                 for f in failures:
                     print(f"    - {f}")
 

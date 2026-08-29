@@ -1,17 +1,29 @@
 name: Eval Gate
 
-# Pull requests only. This job spends real OpenAI credit on every run — agent
-# regressions plus a full ragas pass — and running it again on push to main
-# would re-score the identical tree the PR just scored, at double the cost.
+# Two tiers, split by cost rather than by importance.
+#
+# Every pull request runs retrieval only: embeddings and nothing else, no
+# answer generation and no LLM judge, in well under a minute. That catches the
+# regression that matters most, because if retrieval stops finding the right
+# postings then every judged metric downstream is measuring a broken retriever.
+#
+# The judged tier — agent regressions plus the four ragas metrics over 41
+# questions — runs nightly instead of per-PR. It generates an answer per
+# question and judges each of them, so it costs real money on every run, and
+# per-PR is the wrong cadence for a signal whose run-to-run spread is 0.015.
 on:
   pull_request:
     branches: [main]
+  schedule:
+    # 04:00 UTC daily. Nothing depends on the exact hour.
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 jobs:
-  eval:
+  retrieval:
+    name: Retrieval gate (cheap)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -26,16 +38,47 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      # --ragas is what puts the RAG pipeline behind this gate; without it only
-      # the agent regressions run. The script writes progress to stderr and the
-      # report to stdout, so the redirect below captures parseable JSON, and it
-      # exits non-zero when any floor is missed — that exit code is the gate.
-      - name: Run eval gate
+      - name: Unit tests
+        run: uv run pytest -q
+
+      # Exits non-zero when the hit rate drops below its floor; that exit code
+      # is the gate. Progress goes to stderr, so stdout stays parseable JSON.
+      - name: Retrieval gate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run python scripts/eval_gate.py --retrieval-only --json > retrieval_results.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-results
+          path: retrieval_results.json
+
+  full:
+    name: Full eval gate (judged)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Full eval gate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run python scripts/eval_gate.py --ragas --json > eval_results.json
 
-      - name: Upload eval results
+      - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:

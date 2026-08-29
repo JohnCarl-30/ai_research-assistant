@@ -53,24 +53,34 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # Floors, not targets — they exist to catch regressions, not to certify quality.
 #
-# Observed across runs on 2026-08-06 (gpt-4o-mini judge, text-embedding-3-small,
-# top_k=5), same code, same corpus:
-#   faithfulness      0.773 - 0.909
-#   answer_relevancy  0.687 - 0.775
-#   context_precision 0.806 - 0.818
-#   context_recall    0.909 - 1.000
+# Observed across 3 runs on 2026-08-29 (gpt-4o-mini judge, text-embedding-3-small,
+# top_k=5, 41 questions), same code, same corpus:
+#   faithfulness      0.889 - 0.904   (spread 0.015)
+#   answer_relevancy  0.778 - 0.784   (spread 0.006)
+#   context_precision 0.809 - 0.821   (spread 0.012)
+#   context_recall    0.935 - 0.943   (spread 0.008)
 #
-# That spread is the point: an LLM judge over 11 questions swings ~0.15 run to
-# run even at temperature 0, because the metrics re-decompose answers into
-# statements each time. Floors are set ~0.10 below the *lowest* observed value,
-# not below the best one — a floor calibrated on a good run fails on the next
-# good run, and a flaky gate gets ignored. Tightening these means adding
-# questions to shrink the standard error, not just raising the numbers.
+# Compare the previous calibration, on the same code and corpus but only 11
+# questions: faithfulness alone ranged 0.773 - 0.909, a spread of 0.136. The
+# judge is no less noisy per question — it still re-decomposes each answer into
+# statements every run — but that noise is averaged over 41 samples instead of
+# 11, and the standard error falls with the square root of n. Nothing about the
+# pipeline changed between those two calibrations; only the sample size did.
+#
+# Floors sit ~0.05 below the *lowest* observed value, never below the best one:
+# a floor calibrated on a good run fails on the next good run, and a flaky gate
+# gets ignored. That margin is still roughly 3x the widest observed spread, so
+# it absorbs ordinary judge noise while catching a genuine 5-point regression.
+#
+# Two caveats before tightening further. Three runs is a thin basis for
+# estimating run-to-run variance — collect more before narrowing the margin.
+# And these floors are tied to this judge model and this corpus; changing either
+# invalidates them, so re-measure rather than assuming the numbers carry over.
 THRESHOLDS = {
-    "faithfulness": 0.65,
-    "answer_relevancy": 0.60,
-    "llm_context_precision_with_reference": 0.70,
-    "context_recall": 0.75,
+    "faithfulness": 0.84,
+    "answer_relevancy": 0.73,
+    "llm_context_precision_with_reference": 0.76,
+    "context_recall": 0.88,
 }
 
 

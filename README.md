@@ -199,13 +199,18 @@ LLM-judged numbers above it are measuring a broken retriever.
 Thresholds live in `THRESHOLDS` in `tests/eval/harness.py`. They are regression floors,
 not targets.
 
-**On reading the scores:** repeated runs of identical code over the same corpus varied
-by up to ~0.15 (faithfulness landed anywhere from 0.773 to 0.909). An LLM judge over 11
-questions is noisy even at temperature 0, so a single run is not a precise measurement
-and small score movements are not signal. The floors are set well below the lowest
-observed value for that reason. Making this a trustworthy gate means growing the
-question set in `tests/eval/fixtures/questions.json` to shrink the standard error —
-raising the floors alone just produces a flaky suite.
+**On reading the scores:** the question set in `tests/eval/fixtures/questions.json` is
+41 questions — 38 grounded in specific postings, 3 deliberately unanswerable so refusal
+is measured too. Sample size is what makes this gate trustworthy. At 11 questions,
+repeated runs of *identical* code varied by up to 0.136 on faithfulness (0.773 to
+0.909), which is wider than most regressions worth catching. At 41 the same three-run
+spread is 0.015. The judge is no less noisy per question; the noise is just averaged
+over more samples, and the standard error falls with the square root of n.
+
+That is the lever to reach for. If you want tighter floors, add questions — raising the
+numbers against a small sample just produces a flaky suite that everyone learns to
+ignore. Floors sit ~0.05 below the lowest observed value, roughly 3x the widest observed
+spread, and are tied to this judge model and this corpus: change either and re-measure.
 
 > **Note:** ragas 0.4.x cannot be imported alongside langchain-community 0.4.x
 > ([ragas#2753](https://github.com/explodinggradients/ragas/issues/2753)).

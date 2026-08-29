@@ -11,6 +11,7 @@ import os
 
 import pytest
 
+from app.rag.qa import NO_ANSWER
 from tests.eval.harness import THRESHOLDS, evaluate_rag
 
 pytestmark = [
@@ -35,7 +36,9 @@ async def test_corpus_was_indexed(report):
 async def test_retrieval_finds_the_expected_postings(report):
     hit_rate = report["retrieval_hit_rate"]
     assert hit_rate is not None
-    assert hit_rate >= 0.8, f"retrieval hit rate {hit_rate:.2f} — the retriever is missing jobs"
+    # Read 100% on all three calibration runs over 38 grounded questions, so
+    # 0.95 leaves room for a single case to drift without failing the suite.
+    assert hit_rate >= 0.95, f"retrieval hit rate {hit_rate:.2f} — the retriever is missing jobs"
 
 
 async def test_every_metric_was_scored(report):
@@ -52,8 +55,16 @@ async def test_metric_meets_threshold(report, metric):
     )
 
 
-async def test_out_of_scope_question_is_refused(report):
-    """The corpus says nothing about Japan; the answer must not invent one."""
-    case = next(c for c in report["cases"] if not c.expected_job_urls)
-    lowered = case.answer.lower()
-    assert "japan" not in lowered or "don't have enough information" in lowered
+async def test_out_of_scope_questions_are_refused(report):
+    """Every question the corpus cannot answer must be refused, not invented.
+
+    Checked across all of them, not just the first. This previously pulled a
+    single case with `next(...)` and matched on the word "japan", so adding
+    out-of-scope cases silently left them untested — the assertion could only
+    ever fail for the one question it was written against.
+    """
+    cases = [c for c in report["cases"] if not c.expected_job_urls]
+    assert cases, "the question set has no out-of-scope case to check refusal with"
+
+    answered = [c.question for c in cases if NO_ANSWER.lower() not in c.answer.lower()]
+    assert not answered, f"out-of-scope questions were answered instead of refused: {answered}"

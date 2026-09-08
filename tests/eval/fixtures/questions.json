@@ -1,0 +1,241 @@
+[
+  {
+    "question": "How many journal entries per day does the Ledgerline ledger service process?",
+    "reference": "About 40 million journal entries per day.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "Which roles are remote and open to candidates in the EU?",
+    "reference": "The Platform Engineer and Rust Systems Engineer roles at Northwind Systems are remote, EU only.",
+    "expected_job_urls": [
+      "https://example.com/jobs/northwind-platform",
+      "https://example.com/jobs/northwind-rust"
+    ]
+  },
+  {
+    "question": "Does the Ledgerline backend role require Kubernetes experience?",
+    "reference": "No. The posting states Kubernetes experience is not required; their services run on ECS Fargate.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "What is the salary range for the machine learning engineer role, and where is it based?",
+    "reference": "$185,000 to $225,000, based in Seattle, WA, hybrid with 3 days onsite.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "Which job involves rewriting a service in Rust, and what is it replacing?",
+    "reference": "The Rust Systems Engineer role at Northwind Systems. It is a greenfield rewrite of the edge proxy, replacing a Go service that outgrew its garbage collector.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-rust"]
+  },
+  {
+    "question": "Is a PhD required for the ranking role at Trailhead?",
+    "reference": "No. The posting explicitly says a PhD is not required and is not weighted in hiring.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "What data stack does the Ledgerline data engineering role use?",
+    "reference": "dbt, Airflow for orchestration, and Snowflake as the warehouse, fed by change-data-capture streams such as Debezium.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-data"]
+  },
+  {
+    "question": "How often is on-call for the Northwind platform role, and is it paid?",
+    "reference": "One week in six, and it is compensated separately.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-platform"]
+  },
+  {
+    "question": "Which roles at Trailhead are hybrid, and how many days onsite?",
+    "reference": "Both the Machine Learning Engineer and Frontend Engineer roles at Trailhead are hybrid in Seattle with 3 days onsite.",
+    "expected_job_urls": [
+      "https://example.com/jobs/trailhead-ml",
+      "https://example.com/jobs/trailhead-frontend"
+    ]
+  },
+  {
+    "question": "What accessibility standard does the frontend role hold itself to?",
+    "reference": "WCAG 2.1 AA, which is part of every ticket.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-frontend"]
+  },
+  {
+    "question": "Which company offers visa sponsorship for relocation to Japan?",
+    "reference": "None of the indexed job postings mention visa sponsorship or Japan, so this cannot be answered from the postings.",
+    "expected_job_urls": []
+  },
+
+  {
+    "question": "How large is the team on the Ledgerline backend role, and who does it report to?",
+    "reference": "The team is nine engineers and reports directly to the CTO.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "How often does Ledgerline deploy?",
+    "reference": "Roughly twenty times a week.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "What is the on-call arrangement for the Ledgerline backend role?",
+    "reference": "A follow-the-sun on-call rotation with no overnight pages.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+  {
+    "question": "How many years of Go experience does the Ledgerline backend role ask for?",
+    "reference": "7 or more years building backend services in Go.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-backend"]
+  },
+
+  {
+    "question": "How many listings does Trailhead's ranking team work across?",
+    "reference": "12 million listings.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "How many experiments does Trailhead run per quarter, and on what platform?",
+    "reference": "Roughly 300 tests per quarter, run through an in-house A/B platform.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "Which machine learning framework does the Trailhead ranking role expect in production?",
+    "reference": "PyTorch — the role asks for production experience training and serving PyTorch models.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+  {
+    "question": "Which parts of the ranking system would you work on at Trailhead?",
+    "reference": "Candidate generation and the learned reranker that sits behind the search bar.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+
+  {
+    "question": "What is the frontend stack for the Trailhead storefront?",
+    "reference": "TypeScript, React and Next.js, rendered at the edge.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-frontend"]
+  },
+  {
+    "question": "How many product teams use the component library at Trailhead?",
+    "reference": "Four product teams.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-frontend"]
+  },
+  {
+    "question": "How many years of React does the Trailhead frontend role require?",
+    "reference": "5 or more years of React, plus strong TypeScript.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-frontend"]
+  },
+
+  {
+    "question": "How big is the organization that Northwind's internal developer platform serves?",
+    "reference": "A 400-engineer organization.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-platform"]
+  },
+  {
+    "question": "What CI/CD system is Northwind moving to, and what are they migrating away from?",
+    "reference": "Their CI/CD pipelines are built on GitHub Actions, and they are migrating away from Jenkins, with that work expected to finish this year.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-platform"]
+  },
+  {
+    "question": "What infrastructure-as-code tool does the Northwind platform role use, and what does it provision?",
+    "reference": "Terraform, used at scale to provision their Kubernetes clusters.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-platform"]
+  },
+
+  {
+    "question": "How much data lands per day in the Ledgerline data engineering role?",
+    "reference": "Roughly two terabytes per day, arriving from change-data-capture streams.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-data"]
+  },
+  {
+    "question": "Which data warehouse does Ledgerline's data engineering role use?",
+    "reference": "Snowflake.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-data"]
+  },
+  {
+    "question": "What is Python used for in the Ledgerline data engineering role?",
+    "reference": "Writing custom operators, alongside the dbt and Airflow work.",
+    "expected_job_urls": ["https://example.com/jobs/ledgerline-data"]
+  },
+
+  {
+    "question": "How much traffic does Northwind's edge proxy handle at peak?",
+    "reference": "About 80,000 requests per second at peak.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-rust"]
+  },
+  {
+    "question": "What does Northwind's edge proxy do for internal services?",
+    "reference": "It terminates TLS for every internal service.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-rust"]
+  },
+  {
+    "question": "Which async runtime does the Northwind Rust role expect?",
+    "reference": "Tokio — the role asks for production async Rust on Tokio.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-rust"]
+  },
+  {
+    "question": "What prior experience counts as a strong signal for the Northwind Rust role?",
+    "reference": "Prior work on proxies, load balancers or TLS termination.",
+    "expected_job_urls": ["https://example.com/jobs/northwind-rust"]
+  },
+
+  {
+    "question": "Which roles are based in Seattle, and what do they pay?",
+    "reference": "The Machine Learning Engineer at $185,000 to $225,000 and the Frontend Engineer at $140,000 to $165,000, both at Trailhead and both hybrid with 3 days onsite.",
+    "expected_job_urls": [
+      "https://example.com/jobs/trailhead-ml",
+      "https://example.com/jobs/trailhead-frontend"
+    ]
+  },
+  {
+    "question": "Which roles are at Ledgerline, and are they remote?",
+    "reference": "The Senior Backend Engineer and the Data Engineer, both Remote (US).",
+    "expected_job_urls": [
+      "https://example.com/jobs/ledgerline-backend",
+      "https://example.com/jobs/ledgerline-data"
+    ]
+  },
+  {
+    "question": "Which roles pay in euros, and what are their ranges?",
+    "reference": "The two Northwind Systems roles: Platform Engineer at €95,000 to €120,000 and Rust Systems Engineer at €110,000 to €140,000.",
+    "expected_job_urls": [
+      "https://example.com/jobs/northwind-platform",
+      "https://example.com/jobs/northwind-rust"
+    ]
+  },
+  {
+    "question": "Which roles mention Kubernetes, and in what way?",
+    "reference": "Two roles mention it in opposite directions. The Northwind Platform Engineer role requires deep Kubernetes operations experience, while the Ledgerline Senior Backend Engineer role explicitly does not require it because their services run on ECS Fargate.",
+    "expected_job_urls": [
+      "https://example.com/jobs/northwind-platform",
+      "https://example.com/jobs/ledgerline-backend"
+    ]
+  },
+  {
+    "question": "Which roles involve Go, and in what capacity?",
+    "reference": "Three. The Ledgerline Senior Backend Engineer role requires 7+ years of Go. The Northwind Platform Engineer role accepts Go or Python for tooling. The Northwind Rust Systems Engineer role is replacing a Go service that outgrew its garbage collector.",
+    "expected_job_urls": [
+      "https://example.com/jobs/ledgerline-backend",
+      "https://example.com/jobs/northwind-platform",
+      "https://example.com/jobs/northwind-rust"
+    ]
+  },
+  {
+    "question": "Which roles ask for Python?",
+    "reference": "Three. The Trailhead Machine Learning Engineer role asks for strong Python, the Northwind Platform Engineer role accepts Go or Python for tooling, and the Ledgerline Data Engineer role uses Python for custom operators.",
+    "expected_job_urls": [
+      "https://example.com/jobs/trailhead-ml",
+      "https://example.com/jobs/northwind-platform",
+      "https://example.com/jobs/ledgerline-data"
+    ]
+  },
+  {
+    "question": "Which role has the highest advertised salary, and what is the top of its range?",
+    "reference": "The Machine Learning Engineer, Ranking role at Trailhead, topping out at $225,000.",
+    "expected_job_urls": ["https://example.com/jobs/trailhead-ml"]
+  },
+
+  {
+    "question": "Do any of these roles offer equity or stock options?",
+    "reference": "None of the indexed job postings mention equity or stock options, so this cannot be answered from the postings.",
+    "expected_job_urls": []
+  },
+  {
+    "question": "Which of these companies offers a four-day work week?",
+    "reference": "None of the indexed job postings mention a four-day work week, so this cannot be answered from the postings.",
+    "expected_job_urls": []
+  }
+]

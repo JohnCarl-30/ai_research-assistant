@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     DateTime,
@@ -14,7 +15,15 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import get_settings
 from app.database import Base
+
+EMBEDDING_DIM = get_settings().embedding_dimensions
+
+# pgvector in production; JSON elsewhere so the SQLite test suite can still
+# create the table and round-trip vectors (see app/rag/vector_store.py, which
+# falls back to Python-side cosine when the dialect has no `<=>` operator).
+EmbeddingType = Vector(EMBEDDING_DIM).with_variant(JSON, "sqlite")
 
 
 class Company(Base):
@@ -60,6 +69,32 @@ class Job(Base):
 
     company: Mapped["Company | None"] = relationship("Company", back_populates="jobs")
     tags: Mapped[list["JobTag"]] = relationship("JobTag", back_populates="job")
+    chunks: Mapped[list["JobChunk"]] = relationship(
+        "JobChunk", back_populates="job", cascade="all, delete-orphan"
+    )
+
+
+class JobChunk(Base):
+    """An embedded slice of a job posting — the retrieval unit for RAG."""
+
+    __tablename__ = "job_chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer)
+    section: Mapped[str] = mapped_column(String(32))
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(EmbeddingType)
+    # Recorded so a model change is detectable — vectors from different models
+    # are not comparable and must be re-indexed rather than silently mixed.
+    embedding_model: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    job: Mapped["Job"] = relationship("Job", back_populates="chunks")
+
+    __table_args__ = (UniqueConstraint("job_id", "chunk_index", name="uq_job_chunk_index"),)
 
 
 class ScanResult(Base):

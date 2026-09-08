@@ -1,9 +1,14 @@
+"""LangGraph pipeline for job search automation.
+
+Flow: scrape -> extract -> research -> cover_letters -> persist -> index -> END
+"""
+
 import uuid
 from collections import Counter
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from typing import Annotated, TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
 from sqlalchemy import select
 
 from app.agents.cover_letter import generate_cover_letter
@@ -16,6 +21,7 @@ from app.models import (
     SalaryData,
     TagCount,
 )
+from app.rag.vector_store import index_jobs, unindexed_jobs
 from app.services.persistence import (
     complete_scan,
     start_scan,
@@ -25,29 +31,32 @@ from app.services.persistence import (
 from app.services.tags import extract_source_tags, extract_tags
 
 
-@dataclass
-class PipelineState:
+class PipelineState(TypedDict):
+    """TypedDict state for LangGraph pipeline."""
     query: str
-    location: str = ""
-    user_skills: list[str] = field(default_factory=list)
-    jobs: list[ScrapedJob] = field(default_factory=list)
-    companies_researched: dict = field(default_factory=dict)
-    cover_letters: dict = field(default_factory=dict)
-    new_companies: list[str] = field(default_factory=list)
-    status: str = "pending"
-    error: str | None = None
-    scan_id: str | None = None
-    jobs_found: int = 0
-    new_jobs: int = 0
-    reviews: list[dict] = field(default_factory=list)
-    salaries: list[dict] = field(default_factory=list)
-    top_tags: list[dict] = field(default_factory=list)
+    location: str
+    user_skills: Annotated[list[str], lambda x, y: x + y]
+    jobs: list[ScrapedJob]
+    companies_researched: dict
+    cover_letters: dict
+    new_companies: list[str]
+    status: str
+    error: str | None
+    scan_id: str | None
+    jobs_found: int
+    new_jobs: int
+    reviews: list[dict]
+    salaries: list[dict]
+    top_tags: list[dict]
+    chunks_indexed: int
+    messages: Annotated[list[dict], add_messages]
 
 
 async def scrape_jobs(state: PipelineState) -> dict:
+    """Scrape job boards for listings."""
     try:
         scraper = JobScraper()
-        result = await scraper.scrape_all(state.query, state.location)
+        result = await scraper.scrape_all(state.get("query", ""), state.get("location", ""))
         jobs, reviews, salaries = result
         return {
             "jobs": jobs,
@@ -61,24 +70,27 @@ async def scrape_jobs(state: PipelineState) -> dict:
 
 
 def after_scrape(state: PipelineState) -> str:
-    if state.error or (state.status == "failed"):
+    """Route after scraping based on results."""
+    if state.get("error") or state.get("status") == "failed":
         return "persist"
-    if not state.jobs:
+    if not state.get("jobs"):
         return "persist"
     return "extract"
 
 
 async def extract_companies(state: PipelineState) -> dict:
+    """Extract unique company names from jobs."""
     companies = {}
-    for job in state.jobs:
+    for job in state.get("jobs", []):
         if job.company not in companies:
             companies[job.company] = job.url
     return {"new_companies": list(companies.keys())}
 
 
 async def research_companies(state: PipelineState) -> dict:
+    """Research each company using AI."""
     results = {}
-    for company_name in state.new_companies[:10]:
+    for company_name in state.get("new_companies", [])[:10]:
         try:
             result = await research_company(company_name)
             results[company_name] = result
@@ -88,15 +100,16 @@ async def research_companies(state: PipelineState) -> dict:
 
 
 async def generate_cover_letters(state: PipelineState) -> dict:
+    """Generate cover letters for top jobs."""
     cover_letters = {}
-    for job in state.jobs[:5]:
+    for job in state.get("jobs", [])[:5]:
         try:
             result = await generate_cover_letter(
                 job_title=job.title,
                 company_name=job.company,
                 job_description=job.description,
                 requirements=None,
-                user_skills=state.user_skills if state.user_skills else None,
+                user_skills=state.get("user_skills", []) or None,
             )
             cover_letters[job.url] = result
         except Exception as e:
@@ -105,6 +118,9 @@ async def generate_cover_letters(state: PipelineState) -> dict:
 
 
 async def persist_results(state: PipelineState) -> dict:
+    """Persist results to database."""
+    from datetime import UTC, datetime
+
     scan_id = None
     new_jobs = 0
     top_tags: list[dict] = []
@@ -114,12 +130,12 @@ async def persist_results(state: PipelineState) -> dict:
 
     try:
         async with async_session() as session:
-            scan = await start_scan(session, state.query)
+            scan = await start_scan(session, state.get("query", ""))
             scan_id = str(scan.id)
 
             company_name_to_id: dict[str, uuid.UUID] = {}
 
-            for company_name, research in state.companies_researched.items():
+            for company_name, research in state.get("companies_researched", {}).items():
                 mission = None
                 if isinstance(research, dict):
                     mission = research.get("summary") or research.get("raw_response")
@@ -128,7 +144,7 @@ async def persist_results(state: PipelineState) -> dict:
                 company = await upsert_company(session, company_name, mission=mission)
                 company_name_to_id[company_name] = company.id
 
-            for job_data in state.jobs:
+            for job_data in state.get("jobs", []):
                 company_id = company_name_to_id.get(job_data.company)
 
                 extracted = extract_tags(job_data.description or "") + extract_tags(
@@ -170,7 +186,7 @@ async def persist_results(state: PipelineState) -> dict:
                         tag_type_counts.setdefault(tag, Counter())
                         tag_type_counts[tag]["source"] += 1
 
-            for review_data in state.reviews:
+            for review_data in state.get("reviews", []):
                 company_name = review_data.get("company")
                 company_id = company_name_to_id.get(company_name)
                 if company_id:
@@ -186,7 +202,7 @@ async def persist_results(state: PipelineState) -> dict:
                     )
                     session.add(review)
 
-            for salary_data in state.salaries:
+            for salary_data in state.get("salaries", []):
                 company_name = salary_data.get("company")
                 company_id = company_name_to_id.get(company_name)
                 if company_id:
@@ -226,14 +242,14 @@ async def persist_results(state: PipelineState) -> dict:
 
                 top_tags.append({"tag": tag, "count": count})
 
-            status = "completed" if not state.error else "failed"
+            status = "completed" if not state.get("error") else "failed"
             await complete_scan(
                 session,
                 scan,
-                jobs_found=state.jobs_found,
+                jobs_found=state.get("jobs_found", 0),
                 new_jobs=new_jobs,
                 status=status,
-                error=state.error,
+                error=state.get("error"),
             )
             await session.commit()
     except Exception as e:
@@ -243,10 +259,26 @@ async def persist_results(state: PipelineState) -> dict:
         "scan_id": scan_id,
         "new_jobs": new_jobs,
         "top_tags": top_tags,
-        "status": "completed" if not state.error else "failed",
+        "status": "completed" if not state.get("error") else "failed",
     }
 
 
+async def index_jobs_for_rag(state: PipelineState) -> dict:
+    """Embed newly persisted jobs so they are searchable."""
+    if state.get("status") == "failed":
+        return {"chunks_indexed": 0}
+
+    try:
+        async with async_session() as session:
+            jobs = await unindexed_jobs(session, limit=100)
+            chunks = await index_jobs(session, jobs)
+            await session.commit()
+        return {"chunks_indexed": chunks}
+    except Exception:
+        return {"chunks_indexed": 0}
+
+
+# Build the workflow
 workflow = StateGraph(PipelineState)
 
 workflow.add_node("scrape", scrape_jobs)
@@ -254,6 +286,7 @@ workflow.add_node("extract", extract_companies)
 workflow.add_node("research", research_companies)
 workflow.add_node("cover_letters", generate_cover_letters)
 workflow.add_node("persist", persist_results)
+workflow.add_node("index", index_jobs_for_rag)
 
 workflow.set_entry_point("scrape")
 workflow.add_conditional_edges(
@@ -267,7 +300,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("extract", "research")
 workflow.add_edge("research", "cover_letters")
 workflow.add_edge("cover_letters", "persist")
-workflow.add_edge("persist", END)
+workflow.add_edge("persist", "index")
+workflow.add_edge("index", END)
 
 graph = workflow.compile()
 
@@ -277,11 +311,30 @@ async def run_pipeline(
     location: str = "",
     user_skills: list[str] | None = None,
 ) -> dict:
-    initial_state = PipelineState(query=query, location=location, user_skills=user_skills or [])
+    """Run the full pipeline."""
+    initial_state = PipelineState(
+        query=query,
+        location=location,
+        user_skills=user_skills or [],
+        jobs=[],
+        companies_researched={},
+        cover_letters={},
+        new_companies=[],
+        status="pending",
+        error=None,
+        scan_id=None,
+        jobs_found=0,
+        new_jobs=0,
+        reviews=[],
+        salaries=[],
+        top_tags=[],
+        chunks_indexed=0,
+        messages=[],
+    )
     result = await graph.ainvoke(initial_state)
     return {
         "scan_id": result.get("scan_id"),
-        "jobs": [vars(j) for j in result.get("jobs", [])],
+        "jobs": [vars(j) if hasattr(j, "__dict__") else j for j in result.get("jobs", [])],
         "companies": result.get("companies_researched", {}),
         "cover_letters": result.get("cover_letters", {}),
         "jobs_found": result.get("jobs_found", 0),

@@ -1,0 +1,62 @@
+[
+  {
+    "title": "Senior Backend Engineer",
+    "company": "Ledgerline",
+    "url": "https://example.com/jobs/ledgerline-backend",
+    "source": "eval",
+    "location": "Remote (US)",
+    "salary_range": "$170,000 - $210,000",
+    "description": "Ledgerline builds double-entry accounting infrastructure for fintech companies. You will own the core ledger service, which processes about 40 million journal entries per day. The team is nine engineers and reports directly to the CTO. We deploy roughly twenty times a week and run a follow-the-sun on-call rotation with no overnight pages.",
+    "requirements": "7+ years building backend services in Go. Deep familiarity with PostgreSQL, including partitioning and query planning. Experience with event sourcing or double-entry accounting systems is strongly preferred. We do not require Kubernetes experience; our services run on ECS Fargate."
+  },
+  {
+    "title": "Machine Learning Engineer, Ranking",
+    "company": "Trailhead",
+    "url": "https://example.com/jobs/trailhead-ml",
+    "source": "eval",
+    "location": "Seattle, WA (Hybrid, 3 days onsite)",
+    "salary_range": "$185,000 - $225,000",
+    "description": "Trailhead is a marketplace for outdoor gear. The ranking team owns search relevance and personalized recommendations across 12 million listings. You will work on candidate generation and the learned reranker that sits behind our search bar. Experiments run through an in-house A/B platform with roughly 300 tests per quarter.",
+    "requirements": "Strong Python. Production experience training and serving PyTorch models. Familiarity with learning-to-rank objectives and offline/online metric correlation. A PhD is not required and we do not weight it in the hiring process."
+  },
+  {
+    "title": "Frontend Engineer",
+    "company": "Trailhead",
+    "url": "https://example.com/jobs/trailhead-frontend",
+    "source": "eval",
+    "location": "Seattle, WA (Hybrid, 3 days onsite)",
+    "salary_range": "$140,000 - $165,000",
+    "description": "Own the storefront experience at Trailhead. The stack is TypeScript, React and Next.js, rendered at the edge. You will partner with design on a component library used by four product teams.",
+    "requirements": "5+ years of React. Strong TypeScript. Experience with Core Web Vitals and real-user monitoring. Accessibility work to WCAG 2.1 AA is part of every ticket."
+  },
+  {
+    "title": "Platform Engineer",
+    "company": "Northwind Systems",
+    "url": "https://example.com/jobs/northwind-platform",
+    "source": "eval",
+    "location": "Remote (EU only)",
+    "salary_range": "€95,000 - €120,000",
+    "description": "Northwind runs the internal developer platform for a 400-engineer organization. You will maintain our Kubernetes clusters, the Terraform modules that provision them, and the CI/CD pipelines built on GitHub Actions. We are migrating from Jenkins and expect that work to finish this year.",
+    "requirements": "Deep Kubernetes operations experience. Terraform at scale. Go or Python for tooling. On-call is one week in six and is compensated separately."
+  },
+  {
+    "title": "Data Engineer",
+    "company": "Ledgerline",
+    "url": "https://example.com/jobs/ledgerline-data",
+    "source": "eval",
+    "location": "Remote (US)",
+    "salary_range": "$150,000 - $180,000",
+    "description": "Build the analytical layer on top of Ledgerline's transactional systems. You will own our dbt project, the Airflow orchestration around it, and the Snowflake warehouse it lands in. Roughly two terabytes arrive per day from change-data-capture streams.",
+    "requirements": "Expert SQL. Production dbt and Airflow. Comfort with change-data-capture patterns such as Debezium. Python for custom operators."
+  },
+  {
+    "title": "Rust Systems Engineer",
+    "company": "Northwind Systems",
+    "url": "https://example.com/jobs/northwind-rust",
+    "source": "eval",
+    "location": "Remote (EU only)",
+    "salary_range": "€110,000 - €140,000",
+    "description": "Northwind is rewriting its edge proxy in Rust. The proxy terminates TLS for every internal service and currently handles 80,000 requests per second at peak. This is a greenfield rewrite of a Go service that has outgrown its garbage collector.",
+    "requirements": "Production Rust, particularly async Rust on Tokio. Comfort with network protocols at the byte level. Prior work on proxies, load balancers or TLS termination is a strong signal."
+  }
+]

@@ -20,6 +20,27 @@ class ScanResponse(BaseModel):
     error: str | None = None
 
 
+class FirecrawlRequest(BaseModel):
+    role: str
+    location: str = ""
+    remote_only: bool = False
+    max_results: int = 10
+    search_results: list[dict] = []
+    scraped_pages: list[dict] = []
+
+
+class FirecrawlResponse(BaseModel):
+    role: str
+    location: str
+    queries: list[dict]
+    sources: list[str]
+    status: str
+    message: str
+    scan_id: str | None = None
+    jobs_found: int = 0
+    new_jobs: int = 0
+
+
 class JobResponse(BaseModel):
     id: uuid.UUID
     title: str
@@ -117,3 +138,63 @@ class TagResponse(BaseModel):
 class PaginatedTags(BaseModel):
     items: list[TagResponse]
     total: int
+
+
+class IndexRequest(BaseModel):
+    limit: int = 100
+    reindex_all: bool = False
+
+
+class IndexResponse(BaseModel):
+    jobs_indexed: int = 0
+    chunks_written: int = 0
+
+
+class RetrievedChunkResponse(BaseModel):
+    job_id: uuid.UUID
+    job_title: str
+    company_name: str | None = None
+    job_url: str
+    section: str
+    content: str
+    score: float
+    dense_rank: int | None = None
+    sparse_rank: int | None = None
+
+
+class SearchResponse(BaseModel):
+    query: str
+    results: list[RetrievedChunkResponse]
+
+
+class AskRequest(BaseModel):
+    question: str
+    top_k: int | None = None
+    hybrid: bool = True
+
+
+class AskResponse(BaseModel):
+    question: str
+    answer: str
+    contexts: list[str] = []
+    sources: list[RetrievedChunkResponse] = []
+
+
+class MatchRequest(BaseModel):
+    skills: list[str]
+    role: str | None = None
+    limit: int = 10
+
+
+class JobMatchResponse(BaseModel):
+    job_id: uuid.UUID
+    title: str
+    company_name: str | None = None
+    url: str
+    score: float
+    matched_skills: list[str] = []
+    missing_skills: list[str] = []
+
+
+class MatchResponse(BaseModel):
+    matches: list[JobMatchResponse]

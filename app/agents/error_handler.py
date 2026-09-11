@@ -8,8 +8,41 @@ Provides:
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
+
+import httpx
+import openai
+
+# The errors worth retrying, spelled out because the obvious guess is wrong.
+#
+# None of openai's transient errors subclass the builtin TimeoutError or
+# ConnectionError — APITimeoutError, APIConnectionError, RateLimitError and
+# InternalServerError all descend from openai.OpenAIError instead. A predicate
+# of `isinstance(e, (TimeoutError, ConnectionError))` therefore matches nothing
+# this codebase actually raises: every call it guards goes through the OpenAI
+# client. That was the previous default, and it made `with_retry` decorative.
+#
+# Deliberately excluded: AuthenticationError, BadRequestError and
+# NotFoundError. Retrying those burns the budget re-sending a request that is
+# wrong, not unlucky.
+TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
+    TimeoutError,
+    ConnectionError,
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    httpx.ReadError,
+    openai.APITimeoutError,
+    openai.APIConnectionError,
+    openai.RateLimitError,
+    openai.InternalServerError,
+)
+
+
+def is_transient(error: Exception) -> bool:
+    """Whether an error is worth retrying rather than surfacing."""
+    return isinstance(error, TRANSIENT_ERRORS)
 
 
 @dataclass
@@ -19,9 +52,7 @@ class RetryPolicy:
     initial_interval: float = 1.0
     backoff_factor: float = 2.0
     max_interval: float = 60.0
-    retry_on: Callable[[Exception], bool] = field(
-        default_factory=lambda: lambda e: isinstance(e, (TimeoutError, ConnectionError))
-    )
+    retry_on: Callable[[Exception], bool] = field(default_factory=lambda: is_transient)
 
     def get_delay(self, attempt: int) -> float:
         delay = self.initial_interval * (self.backoff_factor ** attempt)

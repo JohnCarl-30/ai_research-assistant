@@ -12,6 +12,7 @@ from langgraph.graph.message import add_messages
 from sqlalchemy import select
 
 from app.agents.cover_letter import generate_cover_letter
+from app.agents.error_handler import RetryPolicy, with_retry
 from app.agents.researcher import research_company
 from app.agents.scraper import JobScraper, ScrapedJob
 from app.database import async_session
@@ -29,6 +30,19 @@ from app.services.persistence import (
     upsert_job,
 )
 from app.services.tags import extract_source_tags, extract_tags
+
+# Every node below that reaches the network retries on transient failures only
+# — see TRANSIENT_ERRORS in error_handler. Two policies, because the two kinds
+# of work fail differently and cost differently.
+#
+# Scraping is one call for the whole run: if it fails the run has nothing to
+# work with, so it is worth waiting longer and trying more times.
+SCRAPE_RETRY = RetryPolicy(max_attempts=4, initial_interval=2.0, max_interval=30.0)
+
+# Per-item LLM and embedding work runs up to ten times per scan. A slow retry
+# here multiplies across every item, and one company failing to research is a
+# gap in the results rather than a dead run, so it gives up sooner.
+ITEM_RETRY = RetryPolicy(max_attempts=3, initial_interval=1.0, max_interval=10.0)
 
 
 class PipelineState(TypedDict):
@@ -49,6 +63,7 @@ class PipelineState(TypedDict):
     salaries: list[dict]
     top_tags: list[dict]
     chunks_indexed: int
+    index_error: str | None
     messages: Annotated[list[dict], add_messages]
 
 
@@ -56,7 +71,12 @@ async def scrape_jobs(state: PipelineState) -> dict:
     """Scrape job boards for listings."""
     try:
         scraper = JobScraper()
-        result = await scraper.scrape_all(state.get("query", ""), state.get("location", ""))
+        result = await with_retry(
+            scraper.scrape_all,
+            state.get("query", ""),
+            state.get("location", ""),
+            policy=SCRAPE_RETRY,
+        )
         jobs, reviews, salaries = result
         return {
             "jobs": jobs,
@@ -92,7 +112,7 @@ async def research_companies(state: PipelineState) -> dict:
     results = {}
     for company_name in state.get("new_companies", [])[:10]:
         try:
-            result = await research_company(company_name)
+            result = await with_retry(research_company, company_name, policy=ITEM_RETRY)
             results[company_name] = result
         except Exception as e:
             results[company_name] = {"error": str(e)}
@@ -104,12 +124,14 @@ async def generate_cover_letters(state: PipelineState) -> dict:
     cover_letters = {}
     for job in state.get("jobs", [])[:5]:
         try:
-            result = await generate_cover_letter(
+            result = await with_retry(
+                generate_cover_letter,
                 job_title=job.title,
                 company_name=job.company,
                 job_description=job.description,
                 requirements=None,
                 user_skills=state.get("user_skills", []) or None,
+                policy=ITEM_RETRY,
             )
             cover_letters[job.url] = result
         except Exception as e:
@@ -271,11 +293,17 @@ async def index_jobs_for_rag(state: PipelineState) -> dict:
     try:
         async with async_session() as session:
             jobs = await unindexed_jobs(session, limit=100)
-            chunks = await index_jobs(session, jobs)
+            # Retried because this is the embedding call — the step most likely
+            # to hit a rate limit, since it batches every new job in one scan.
+            chunks = await with_retry(index_jobs, session, jobs, policy=ITEM_RETRY)
             await session.commit()
         return {"chunks_indexed": chunks}
-    except Exception:
-        return {"chunks_indexed": 0}
+    except Exception as e:
+        # Indexing failing does not fail the scan — the jobs are already
+        # persisted and `unindexed_jobs` will pick them up on the next run. But
+        # it is reported rather than swallowed: a bare `return 0` here is
+        # indistinguishable from "there was nothing to index".
+        return {"chunks_indexed": 0, "index_error": str(e)}
 
 
 # Build the workflow
@@ -329,6 +357,7 @@ async def run_pipeline(
         salaries=[],
         top_tags=[],
         chunks_indexed=0,
+        index_error=None,
         messages=[],
     )
     result = await graph.ainvoke(initial_state)

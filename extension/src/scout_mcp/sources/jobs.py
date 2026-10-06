@@ -197,10 +197,20 @@ def boards_linked(html_text: str) -> list[tuple[Board, str]]:
     return found
 
 
+# Full boards with descriptions run to megabytes for large employers (Stripe,
+# Cloudflare and Palantir each passed 5 MB), so they get a higher limit, and
+# the summary is cached rather than the raw board.
+BOARD_MAX_BYTES = 40_000_000
+BOARD_TTL = 6 * HOUR
+
+
 async def fetch_board(fetcher: Fetcher, board: Board, slug: str) -> list[Job] | None:
     """The board's jobs, or None if this company has no such board."""
     try:
-        data = await fetcher.get_json(BOARD_URLS[board].format(slug=slug), ttl=6 * HOUR)
+        data = await fetcher.get_json(
+            BOARD_URLS[board].format(slug=slug), ttl=BOARD_TTL,
+            max_bytes=BOARD_MAX_BYTES, cache=False,
+        )
     except FetchError as e:
         if e.status in (404, 400, 422):
             return None
@@ -208,6 +218,19 @@ async def fetch_board(fetcher: Fetcher, board: Board, slug: str) -> list[Job] | 
     jobs = PARSERS[board](data)
     # Lever answers unknown boards with an empty list rather than a 404.
     return jobs or None
+
+
+async def _hiring_on(fetcher: Fetcher, board: Board, slug: str, source: str) -> Hiring | None:
+    """The board's hiring summary, from cache when fresh (including "no board")."""
+    key = f"hiring {board} {slug}"
+    cache = fetcher.cache
+    if cache is not None and (hit := cache.get(key, BOARD_TTL)) is not None:
+        return Hiring(**{**hit["hiring"], "board_source": source}) if hit["hiring"] else None
+    jobs = await fetch_board(fetcher, board, slug)
+    hiring = summarize(board, slug, source, jobs) if jobs else None
+    if cache is not None:
+        cache.set(key, {"hiring": hiring.to_dict() if hiring else None})
+    return hiring
 
 
 async def find_hiring(
@@ -224,12 +247,12 @@ async def find_hiring(
     errors: list[str] = []
     for board, slug, source in attempts:
         try:
-            jobs = await fetch_board(fetcher, board, slug)
+            hiring = await _hiring_on(fetcher, board, slug, source)
         except Exception as e:
             errors.append(f"{board}: {e}")
             continue
-        if jobs:
-            return summarize(board, slug, source, jobs)
+        if hiring:
+            return hiring
     if errors:
         raise JobBoardsUnavailableError("; ".join(dict.fromkeys(errors)))
     return None

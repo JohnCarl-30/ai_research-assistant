@@ -26,7 +26,7 @@ from scoring import CRITICAL, ERROR, FAIL, PASS, score_case, summarize
 
 from scout_mcp.company import research_company
 from scout_mcp.sources import dnsinfo
-from scout_mcp.sources.http import Cache, Fetcher, FetchError, Response
+from scout_mcp.sources.http import MAX_BYTES, Cache, Fetcher, FetchError, Response
 
 HERE = Path(__file__).parent
 MARK = {PASS: "✅", FAIL: "❌", CRITICAL: "🚨", ERROR: "⚠️"}
@@ -42,7 +42,7 @@ class Tape(Fetcher):
         self.record = record
         self.hosts: Counter = Counter()
 
-    async def get(self, url, *, ttl, headers=None, max_bytes=0):
+    async def get(self, url, *, ttl, headers=None, max_bytes=MAX_BYTES, cache=True):
         self.hosts[urlparse(url).hostname] += 1
         if self.inner is None:  # replay
             saved = self.tape.get(url)
@@ -52,7 +52,9 @@ class Tape(Fetcher):
                 raise FetchError(url, saved["status"], saved.get("error") or "")
             return Response(**saved["response"])
         try:
-            response = await self.inner.get(url, ttl=ttl, headers=headers)
+            response = await self.inner.get(
+                url, ttl=ttl, headers=headers, max_bytes=max_bytes, cache=cache
+            )
         except FetchError as e:
             if self.record:
                 self.tape[url] = {"status": e.status, "error": str(e)}

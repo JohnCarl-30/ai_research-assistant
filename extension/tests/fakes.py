@@ -20,7 +20,7 @@ class FakeFetcher(Fetcher):
         self.headers = headers or {}
         self.requests: list[tuple[str, dict]] = []
 
-    async def get(self, url, *, ttl, headers=None, max_bytes=0):
+    async def get(self, url, *, ttl, headers=None, max_bytes=0, cache=True):
         self.requests.append((url, headers or {}))
         for needle, answer in self.routes.items():
             if needle in url:

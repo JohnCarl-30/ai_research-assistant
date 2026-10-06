@@ -89,7 +89,7 @@ class Live:
     def __init__(self):
         self.calls = 0
 
-    async def get(self, url, *, ttl, headers=None, max_bytes=0):
+    async def get(self, url, *, ttl, headers=None, max_bytes=0, cache=True):
         self.calls += 1
         if "missing" in url:
             raise FetchError(url, 404)

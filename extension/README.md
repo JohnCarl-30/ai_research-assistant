@@ -89,7 +89,8 @@ company you asked about: `wikidata.org`, the company's own website, your normal
 DNS resolver, `hn.algolia.com`, `api.github.com` and `raw.githubusercontent.com`,
 and the job board APIs
 (`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). There are no
-accounts, keys or telemetry.
+accounts, keys or telemetry. Requests identify Scout by a User-Agent naming the
+project (Wikimedia requires one with contact details); nothing about you is sent.
 
 ## Building
 

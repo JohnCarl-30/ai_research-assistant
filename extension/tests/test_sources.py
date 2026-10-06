@@ -9,7 +9,7 @@ from fakes import FakeFetcher, fixture
 from scout_mcp.github import GitHubToolError, research_github
 from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
 from scout_mcp.sources.github_rest import GitHubRateLimitError, github_rest_caller
-from scout_mcp.sources.http import Cache, Fetcher, Response
+from scout_mcp.sources.http import Cache, Fetcher, FetchError, Response
 
 # --- Wikidata -----------------------------------------------------------------
 
@@ -157,6 +157,15 @@ def test_parse_page_fingerprints_and_extracts_links():
     assert info.about == "Robots We build robots for homes."
 
 
+def test_community_links_are_not_careers_pages():
+    page = Response(url="https://supabase.com/", status=200, headers={}, text="""
+        <a href="https://discord.supabase.com">Join us on Discord</a>
+        <a href="/company/careers">Careers</a>""")
+    assert site.parse_page(page, "supabase.com").careers_url == "https://supabase.com/company/careers"
+    page.text = '<a href="https://acme.io/join-us">Join us</a>'
+    assert site.parse_page(page, "acme.io").careers_url == "https://acme.io/join-us"
+
+
 async def test_inspect_follows_careers_page_to_find_the_job_board():
     fetcher = FakeFetcher({
         "acme.io/careers": '<a href="https://jobs.ashbyhq.com/acme-robots">Open roles</a>',
@@ -286,3 +295,50 @@ async def test_cache_serves_repeats_and_never_stores_credentials(tmp_path, monke
     assert b"ghp_secret" not in (tmp_path / "cache.db").read_bytes()
     assert await fetcher.get_json(url, ttl=0, headers=secret)
     assert len(calls) == 2  # expired entries are refetched
+
+
+def _mock_client(monkeypatch, handler):
+    async def allow(url):
+        return None
+
+    monkeypatch.setattr("scout_mcp.web.ensure_public_url", allow)
+    monkeypatch.setattr(
+        "scout_mcp.sources.http.public_client",
+        lambda timeout=30: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+
+async def test_oversized_bodies_are_reported_not_parsed_and_not_cached(tmp_path, monkeypatch):
+    _mock_client(monkeypatch, lambda request: httpx.Response(200, text='{"jobs": [' + "x" * 500))
+    fetcher = Fetcher(Cache(tmp_path / "cache.db"))
+    with pytest.raises(FetchError, match="too large"):
+        await fetcher.get_json("https://api.example.com/board", ttl=60, max_bytes=100)
+    assert fetcher.cache.db.execute("SELECT count(*) FROM cache").fetchone()[0] == 0
+
+
+async def test_undecodable_compression_is_retried_uncompressed(monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers.get("accept-encoding"))
+        if request.headers.get("accept-encoding") == "identity":
+            return httpx.Response(200, text="<title>Netflix</title>")
+        return httpx.Response(200, content=b"not gzip at all",
+                              headers={"content-encoding": "gzip"})
+
+    _mock_client(monkeypatch, handler)
+    response = await Fetcher().get("https://netflix.example/", ttl=60)
+    assert response.text == "<title>Netflix</title>" and seen[-1] == "identity"
+
+
+async def test_user_agent_carries_contact_details_and_errors_say_why(monkeypatch):
+    agents = []
+
+    def handler(request):
+        agents.append(request.headers["user-agent"])
+        return httpx.Response(403, text="Please set a user-agent and respect our robot policy")
+
+    _mock_client(monkeypatch, handler)
+    with pytest.raises(FetchError, match="respect our robot policy"):
+        await Fetcher().get("https://www.wikidata.org/w/api.php", ttl=60)
+    assert agents[0].startswith("ScoutResearchBot/") and "(https://" in agents[0]

@@ -64,7 +64,18 @@ _FINGERPRINTS = [
 _GITHUB_ORG = re.compile(r"github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?=[/\"'?#\s]|$)")
 _NOT_ORGS = {"about", "features", "pricing", "login", "join", "orgs", "sponsors", "topics",
              "marketplace", "site", "apps", "settings", "enterprise", "security", "collections"}
-_CAREERS_TEXT = re.compile(r"\b(careers?|jobs|join us|we'?re hiring|open roles)\b", re.I)
+_CAREERS_TEXT = re.compile(
+    r"\b(careers?|jobs|we'?re hiring|open roles|join (?:the|our) team)\b", re.I
+)
+# "Join us" alone is as often a community link ("Join us on Discord") as a
+# careers one, so it only counts when the link itself is a careers page.
+_CAREERS_PATH = re.compile(r"/(careers?|jobs|join-us|hiring)\b", re.I)
+
+
+def _is_careers_link(text: str, href: str) -> bool:
+    if _CAREERS_TEXT.search(text):
+        return True
+    return bool(re.search(r"\bjoin us\b", text, re.I) and _CAREERS_PATH.search(href))
 
 
 @dataclass
@@ -129,7 +140,7 @@ def parse_page(page: Response, domain: str) -> SiteInfo:
         if any(s in host for s in ("linkedin.com", "x.com", "twitter.com", "youtube.com")):
             if href not in info.social:
                 info.social.append(href)
-        if info.careers_url is None and _CAREERS_TEXT.search(a.get_text(" ", strip=True)):
+        if info.careers_url is None and _is_careers_link(a.get_text(" ", strip=True), href):
             info.careers_url = href
 
     for tag in soup(["script", "style", "noscript", "svg", "nav", "footer", "header", "form"]):

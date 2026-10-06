@@ -116,3 +116,22 @@ marketplace in step: the same version, settings and tool names.
 It is a standard stdio MCP server, so any MCP client can run it:
 `uv run --directory /path/to/extension python -m scout_mcp`, optionally with
 `SCOUT_DATA_DIR` and `GITHUB_TOKEN` in the environment.
+
+### Accuracy eval
+
+`evals/companies.json` lists real companies with known answers (website,
+Wikidata entry, GitHub org, job board, technologies), each marked as verified
+or believed. `evals/run_eval.py` runs Scout against them and reports accuracy
+per field, with a confidently wrong GitHub match counted as **critical**:
+
+```bash
+uv run python extension/evals/run_eval.py                  # live, keyless
+uv run python extension/evals/run_eval.py --record tape/   # live, saving responses
+uv run python extension/evals/run_eval.py --replay tape/   # offline replay
+```
+
+The `Extension accuracy eval` workflow runs it on GitHub Actions for pull
+requests that touch the extension's code or the eval, and on demand. The report
+appears on the run's summary page. Real companies change websites and job
+boards, so a mismatch is either a bug or a stale answer: check which before
+changing the code or the answer.

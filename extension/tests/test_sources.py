@@ -106,6 +106,19 @@ async def test_find_hiring_prefers_the_board_the_site_links_to():
     assert len(fetcher.requests) == 1
 
 
+async def test_one_board_being_down_does_not_hide_another():
+    fetcher = FakeFetcher({
+        "boards-api.greenhouse.io": (503, "unavailable"),
+        "api.ashbyhq.com/posting-api/job-board/acme": fixture("ashby_linear.json"),
+    })
+    h = await jobs.find_hiring(fetcher, [], guesses=["acme"])
+    assert h.board == "ashby"
+
+    nothing = FakeFetcher({"boards-api.greenhouse.io": (503, "unavailable")})
+    with pytest.raises(jobs.JobBoardsUnavailableError, match="greenhouse"):
+        await jobs.find_hiring(nothing, [], guesses=["acme"])
+
+
 async def test_find_hiring_falls_back_to_guesses_and_skips_empty_boards():
     fetcher = FakeFetcher({
         "api.lever.co/v0/postings/acme": "[]",  # Lever answers unknown boards with []

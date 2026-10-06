@@ -70,10 +70,12 @@ and reviews to it. In Claude Desktop you can also start from the **+** menu:
 
 ## Limits
 
-- **GitHub allows 60 requests an hour without a token**, and one company uses
-  about ten. Results are cached for a day. If you research many companies, set a
-  `GITHUB_TOKEN` environment variable (read-only, public repositories) for
-  5,000 an hour. In Claude Code, set it in the shell you start Claude from.
+- **GitHub without a token:** Scout uses only GitHub's search API (10 searches a
+  minute) and reads files from `raw.githubusercontent.com`, which doesn't count
+  against GitHub's API quota. A company takes 1 to 4 searches, so you can research
+  several companies a minute, and results are cached for a day. A `GITHUB_TOKEN`
+  environment variable (read-only, public repositories) raises the search limit
+  to 30 a minute. In Claude Code, set it in the shell you start Claude from.
 - **Small private companies** are often missing from Wikidata and may not use a
   public job board. The dossier will be thinner, and its `gaps` say where.
 - **DNS and website signals** show what a company has set up, not necessarily
@@ -84,7 +86,8 @@ and reviews to it. In Claude Desktop you can also start from the **+** menu:
 Notes and a response cache are stored only in your notes folder (`notes.db`,
 `cache.db`). Scout contacts only these public services, and only to research the
 company you asked about: `wikidata.org`, the company's own website, your normal
-DNS resolver, `hn.algolia.com`, `api.github.com`, and the job board APIs
+DNS resolver, `hn.algolia.com`, `api.github.com` and `raw.githubusercontent.com`,
+and the job board APIs
 (`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). There are no
 accounts, keys or telemetry.
 

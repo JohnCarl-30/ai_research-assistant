@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fakes import FakeFetcher, fixture
 
-from scout_mcp.github import research_github
+from scout_mcp.github import GitHubToolError, research_github
 from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
 from scout_mcp.sources.github_rest import GitHubRateLimitError, github_rest_caller
 from scout_mcp.sources.http import Cache, Fetcher, Response
@@ -207,28 +207,41 @@ async def test_hn_keeps_only_stories_on_the_domain():
 # --- GitHub over REST ---------------------------------------------------------
 
 
-async def test_github_rest_answers_like_the_mcp_server():
-    repos = {"items": [{"name": "stripe-node", "language": "TypeScript", "stargazers_count": 4000,
-                        "owner": {"login": "stripe"}, "pushed_at": "2026-09-01T00:00:00Z"}]}
+async def test_github_research_uses_only_the_search_api_and_raw_files():
+    repos = {"items": [{"name": "stripe-node", "full_name": "stripe/stripe-node",
+                        "default_branch": "master", "language": "TypeScript",
+                        "stargazers_count": 4000, "owner": {"login": "stripe"},
+                        "pushed_at": "2026-09-01T00:00:00Z"}]}
     fetcher = FakeFetcher({
-        "search/repositories": json.dumps(repos),
-        "contents/package.json": json.dumps({"devDependencies": {"typescript": "5"}}),
-        "repos/stripe/stripe-node/contents/": json.dumps(
-            [{"name": "package.json", "type": "file", "sha": "x"}]),
+        "api.github.com/search/repositories": json.dumps(repos),
+        "raw.githubusercontent.com/stripe/stripe-node/master/package.json": json.dumps(
+            {"devDependencies": {"typescript": "5"}}),
     })
-    call = github_rest_caller(fetcher)
-    profile = await research_github("Stripe", call, org="stripe")
+    profile = await research_github("Stripe", github_rest_caller(fetcher), org="stripe")
+
     assert (profile.org, profile.confidence) == ("stripe", "high")
     assert profile.frameworks == ["typescript"]
-    assert fetcher.requests[0][0].startswith("https://api.github.com/search/repositories?q=org%3Astripe")
-    raw = [h for u, h in fetcher.requests if u.endswith("package.json")][0]
-    assert raw["Accept"] == "application/vnd.github.raw+json"
+    api_calls = [u for u, _ in fetcher.requests if "api.github.com" in u]
+    assert len(api_calls) == 1 and "/search/repositories?q=org%3Astripe" in api_calls[0]
+    # Files come from the repo's real default branch, never the core API.
+    raw = [u for u, _ in fetcher.requests if "raw.githubusercontent.com" in u]
+    assert raw and all("/stripe/stripe-node/master/" in u for u in raw)
 
 
 async def test_github_rate_limit_is_an_error_not_a_missing_org():
     fetcher = FakeFetcher({"api.github.com": (403, "API rate limit exceeded for 1.2.3.4.")})
-    with pytest.raises(GitHubRateLimitError):
+    with pytest.raises(GitHubRateLimitError, match="10 a minute"):
         await research_github("Stripe", github_rest_caller(fetcher), org="stripe")
+
+
+async def test_raw_files_fall_back_to_head_when_the_branch_is_unknown():
+    fetcher = FakeFetcher({"raw.githubusercontent.com/acme/app/HEAD/go.mod": "module acme"})
+    call = github_rest_caller(fetcher)
+    listing = json.loads(await call("get_file_contents",
+                                    {"owner": "acme", "repo": "app", "path": "/"}))
+    assert listing == [{"name": "go.mod", "type": "file"}]
+    with pytest.raises(GitHubToolError):
+        await call("get_file_contents", {"owner": "acme", "repo": "app", "path": "Gemfile"})
 
 
 # --- Cache --------------------------------------------------------------------

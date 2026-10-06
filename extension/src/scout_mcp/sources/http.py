@@ -1,7 +1,7 @@
 """HTTP for the keyless sources: one cache, one User-Agent, public addresses only.
 
-Keyless APIs ration by IP (GitHub allows 60 requests an hour without a token),
-so every successful response is cached in SQLite for a per-source time.
+Keyless APIs ration by IP (GitHub's search API allows 10 requests a minute
+without a token), so every successful response is cached in SQLite for a per-source time.
 Researching the same company twice in a day costs nothing the second time.
 """
 

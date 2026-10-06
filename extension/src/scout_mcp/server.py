@@ -94,7 +94,7 @@ def create_server(config: Config, fetcher: Fetcher | None = None) -> FastMCP:
         Reports top languages, frameworks from dependency manifests, notable
         repos and last activity, with a match confidence. A "low" confidence org
         was guessed from the name and may be a different company. Uses GitHub's
-        public API without a token (60 requests an hour; results cached a day).
+        public search API and raw files without a token (results cached a day).
 
         Args:
             company: Company name, e.g. "Stripe".

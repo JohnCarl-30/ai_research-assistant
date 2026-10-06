@@ -1,0 +1,44 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "scout",
+  "displayName": "Scout Company Research",
+  "version": "0.2.0",
+  "description": "Research any company with no API keys: facts, tech stack, hiring, GitHub activity and red flags.",
+  "author": {
+    "name": "Scout"
+  },
+  "license": "MIT",
+  "keywords": [
+    "company research",
+    "job search",
+    "no api key",
+    "github",
+    "tech stack",
+    "hiring"
+  ],
+  "mcpServers": {
+    "scout": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "python",
+        "-m",
+        "scout_mcp"
+      ],
+      "env": {
+        "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv",
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}"
+      }
+    }
+  },
+  "userConfig": {
+    "notes_directory": {
+      "type": "directory",
+      "title": "Notes folder",
+      "description": "Where your research notebook and cache are stored. Leave blank for ~/.scout, the same notebook the Claude Desktop extension uses.",
+      "required": false
+    }
+  }
+}

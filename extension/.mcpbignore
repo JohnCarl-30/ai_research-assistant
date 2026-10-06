@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+tests/
+.pytest_cache/
+.ruff_cache/
+*.mcpb
+# Claude Code plugin files (the same folder is also the plugin root)
+.claude-plugin/
+skills/

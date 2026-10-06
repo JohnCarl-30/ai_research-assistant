@@ -1,0 +1,94 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/dist/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "scout",
+  "display_name": "Scout Company Research",
+  "version": "0.2.0",
+  "description": "Research any company with no API keys: facts, tech stack, hiring, GitHub activity and red flags.",
+  "long_description": "Scout turns Claude into a company researcher that runs on your computer and needs no API keys or accounts. Ask about any company and Scout builds a dossier from public sources: facts from Wikidata (founding year, headcount, headquarters), the tech stack its website runs on, the email and SaaS tools in its DNS records, open roles from its public job board (by team, location and the technologies they mention), its GitHub organisation, and Hacker News discussions of its launches. Claude adds recent news with its own web search and writes a cited brief, saved to a notebook stored only on your machine.",
+  "author": {
+    "name": "Scout"
+  },
+  "server": {
+    "type": "uv",
+    "entry_point": "src/scout_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "python",
+        "-m",
+        "scout_mcp"
+      ],
+      "env": {
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "research_company",
+      "description": "Keyless company dossier: Wikidata facts, website tech stack, DNS, job boards, GitHub, Hacker News, saved notes"
+    },
+    {
+      "name": "read_page",
+      "description": "Read a public web page as plain text"
+    },
+    {
+      "name": "github_research",
+      "description": "A company's tech stack and activity from its public GitHub org"
+    },
+    {
+      "name": "save_note",
+      "description": "Save a finding to your local notebook"
+    },
+    {
+      "name": "search_notes",
+      "description": "Keyword search over saved notes"
+    },
+    {
+      "name": "list_notes",
+      "description": "Most recent saved notes"
+    },
+    {
+      "name": "get_note",
+      "description": "Read one saved note"
+    },
+    {
+      "name": "delete_note",
+      "description": "Delete a saved note"
+    }
+  ],
+  "tools_generated": false,
+  "prompts_generated": true,
+  "user_config": {
+    "notes_directory": {
+      "type": "directory",
+      "title": "Notes folder",
+      "description": "Where your research notebook and cache are stored. Defaults to ~/.scout, shared with the Claude Code plugin.",
+      "default": "${HOME}/.scout",
+      "required": false
+    }
+  },
+  "keywords": [
+    "company research",
+    "job search",
+    "no api key",
+    "github",
+    "tech stack",
+    "hiring"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  }
+}

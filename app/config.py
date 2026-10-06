@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     rag_candidate_k: int = 25
     rag_answer_model: str = "gpt-4o-mini"
 
+    # GitHub research (via the remote GitHub MCP server). A fine-grained token
+    # with read-only public repository access is enough; unset disables it.
+    github_token: str | None = None
+    github_mcp_url: str = "https://api.githubcopilot.com/mcp/"
+
     # Evaluation
     eval_llm_model: str = "gpt-4o-mini"
 

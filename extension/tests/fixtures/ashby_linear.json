@@ -1,0 +1,146 @@
+{
+ "jobs": [
+  {
+   "id": "d3bc1ced-3ce4-4086-a050-555055dbb1ff",
+   "title": "Senior / Staff Fullstack Engineer",
+   "department": "Product",
+   "team": "Engineering",
+   "employmentType": "FullTime",
+   "location": "Europe",
+   "secondaryLocations": [],
+   "publishedAt": "2021-04-27T20:13:45.158+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "European Union"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/linear/d3bc1ced-3ce4-4086-a050-555055dbb1ff",
+   "applyUrl": "https://jobs.ashbyhq.com/linear/d3bc1ced-3ce4-4086-a050-555055dbb1ff/application",
+   "descriptionHtml": "",
+   "descriptionPlain": "At Linear, we're building the product development system for teams and agents. AI is fundamentally changing how software gets built, and we\u2019re shaping the tools this new era requires. \n\nFounded in 2019, Linear has become the platform of choice for more than 40,000 companies (including OpenAI, Coinbase, and Ramp) to plan, build, and ship their products. Today, our team is distributed across North America, Europe, and Australia, and we\u2019re continuing to grow internationally. What unites us is relentless focus, fast execution, and a deep care for software craftsmanship. \n\nAs a small team, we\u2019re all generalists and constantly picking up new challenges. When it comes to code, we\u2019re looking to work with experienced people who can pick a problem and solve it.  We use TypeScript and build scalable systems so we can continuously make progress on a solid foundation. We don\u2019t expect you to have a background in everything we use, but we do expect strong JavaScript fundamentals and a background working with React and TypeScript.\n\nLocation & work mode\n\nLinear is a remote-first company, with optional co-working offices in San Francisco, New York, and London. This role is open to candidates based in North America and Europe. You can work from most timezones within these regions. We value deep focus and async collaboration, with intentional moments to connect in person through team off-sites, optional co-working, and occasional travel.\n\nWhat you'll do\n\n - Build new user-facing features with ev"
+  },
+  {
+   "id": "cd5ae036-0223-427a-b038-ba16ef9dcb32",
+   "title": "Senior / Staff Fullstack Engineer",
+   "department": "Product",
+   "team": "Engineering",
+   "employmentType": "FullTime",
+   "location": "North America",
+   "secondaryLocations": [],
+   "publishedAt": "2021-08-18T20:48:26.891+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "United States"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/linear/cd5ae036-0223-427a-b038-ba16ef9dcb32",
+   "applyUrl": "https://jobs.ashbyhq.com/linear/cd5ae036-0223-427a-b038-ba16ef9dcb32/application",
+   "descriptionHtml": "",
+   "descriptionPlain": "At Linear, we're building the product development system for teams and agents. AI is fundamentally changing how software gets built, and we\u2019re shaping the tools this new era requires. \n\nFounded in 2019, Linear has become the platform of choice for more than 40,000 companies (including OpenAI, Coinbase, and Ramp) to plan, build, and ship their products. Today, our team is distributed across North America, Europe, and Australia, and we\u2019re continuing to grow internationally. What unites us is relentless focus, fast execution, and a deep care for software craftsmanship.\n\nAs a small team, we\u2019re all generalists that work across the full stack (built in Typescript end-to-end). We\u2019re looking for experienced engineers that thrive in an environment of autonomy and individual responsibility to help us build the future of product development.\n\nLocation & work mode\n\nLinear is a remote-first company, with optional co-working offices in San Francisco, New York, and London. This role is open to candidates based in the US and Europe. You can work from anywhere within those regions. We value deep focus and async collaboration, with intentional moments to connect in person through team off-sites, optional co-working, and occasional travel.\n\nWhat you'll do\n\n - Build new user-facing features with everything from database models to GraphQL resolvers and UI components\n\n - Optimize our data synchronization stack by applying better serialization protocols\n\n - Add real-time collaborative editing to ou"
+  },
+  {
+   "id": "069c4628-88d7-4e4d-b393-c996fc7f3076",
+   "title": "Senior / Staff Product Engineer",
+   "department": "Product",
+   "team": "Engineering",
+   "employmentType": "FullTime",
+   "location": "Europe",
+   "secondaryLocations": [],
+   "publishedAt": "2022-01-22T08:49:37.626+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "European Union"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/linear/069c4628-88d7-4e4d-b393-c996fc7f3076",
+   "applyUrl": "https://jobs.ashbyhq.com/linear/069c4628-88d7-4e4d-b393-c996fc7f3076/application",
+   "descriptionHtml": "",
+   "descriptionPlain": "At Linear, we're building the product development system for teams and agents. AI is fundamentally changing how software gets built, and we\u2019re shaping the tools this new era requires. \n\nFounded in 2019, Linear has become the platform of choice for more than 40,000 companies (including OpenAI, Coinbase, and Ramp) to plan, build, and ship their products. Today, our team is distributed across North America, Europe, and Australia, and we\u2019re continuing to grow internationally. What unites us is relentless focus, fast execution, and a deep care for software craftsmanship.\n\nAs a small team, we\u2019re all generalists that work across the full stack (built in Typescript end-to-end). We\u2019re looking for experienced engineers that thrive in an environment of autonomy and individual responsibility to help us build the future of product development.\n\nLocation & work mode\n\nLinear is a remote-first company, with optional co-working offices in San Francisco, New York, and London. This role is open to candidates based in the US and Europe. You can work from anywhere within these regions. We value deep focus and async collaboration, with intentional moments to connect in person through team off-sites, optional co-working, and occasional travel.\n\nWhat you'll do\n\n - Work closely with founders and design to implement new concepts and ideas\n\n - Build AI-powered functionality into the core of Linear\n\n - Update our realtime collaborative content editor used across all internal surfaces\n\n - Build new user-"
+  },
+  {
+   "id": "f04f398b-6320-499d-8a60-290239d62da8",
+   "title": "Design Engineer (Web & Brand)",
+   "department": "GTM",
+   "team": "Magic",
+   "employmentType": "FullTime",
+   "location": "North America",
+   "secondaryLocations": [
+    {
+     "location": "Europe",
+     "address": {
+      "postalAddress": {
+       "addressCountry": "European Union"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2026-09-15T18:05:31.687+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "United States"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/linear/f04f398b-6320-499d-8a60-290239d62da8",
+   "applyUrl": "https://jobs.ashbyhq.com/linear/f04f398b-6320-499d-8a60-290239d62da8/application",
+   "descriptionHtml": "",
+   "descriptionPlain": "At Linear, we're building the product development system for teams and agents. AI is fundamentally changing how software gets built, and we\u2019re shaping the tools this new era requires.\n\nFounded in 2019, Linear has become the platform of choice for more than 40,000 companies (including OpenAI, Coinbase, and Ramp) to plan, build, and ship their products. Today, our team is distributed across North America, Europe, and Australia, and we\u2019re continuing to grow internationally. What unites us is relentless focus, fast execution, and a deep care for software craftsmanship.\n\nWe're looking for a Design Engineer with strong visual taste to help drive our creative initiatives across web and brand. When it comes to design and code, we\u2019re looking to work with experienced people who can pick up any problem and solve it. For us, it\u2019s both how it works and how it looks. At its core, Linear is a developer tool where speed, interactions, and small details matter. We expect a broad set of design skills and the ability to create high-quality designs, interactions, and prototypes.\n\nIn this role, you will help communicate Linear's story\u2014what we're building and why it matters\u2014as part of our internal creative agency: the Magic Team.\n\nWhat you'll do\n\n - You will be responsible for building complex and interactive UI web/app experiences\n\n - Build beautiful, responsive websites, landing pages, and internal tools\n\n - Implement creative animations and interactions in code\n\n - Explore visual design in Figm"
+  },
+  {
+   "id": "ea0b5868-6d7a-46fa-99d8-207cd19357a6",
+   "title": "Design Engineer (Web & Brand)",
+   "department": "GTM",
+   "team": "Magic",
+   "employmentType": "FullTime",
+   "location": "Europe",
+   "secondaryLocations": [],
+   "publishedAt": "2026-09-15T18:05:47.890+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "European Union"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/linear/ea0b5868-6d7a-46fa-99d8-207cd19357a6",
+   "applyUrl": "https://jobs.ashbyhq.com/linear/ea0b5868-6d7a-46fa-99d8-207cd19357a6/application",
+   "descriptionHtml": "",
+   "descriptionPlain": "At Linear, we're building the product development system for teams and agents. AI is fundamentally changing how software gets built, and we\u2019re shaping the tools this new era requires.\n\nFounded in 2019, Linear has become the platform of choice for more than 40,000 companies (including OpenAI, Coinbase, and Ramp) to plan, build, and ship their products. Today, our team is distributed across North America, Europe, and Australia, and we\u2019re continuing to grow internationally. What unites us is relentless focus, fast execution, and a deep care for software craftsmanship.\n\nWe're looking for a Design Engineer with strong visual taste to help drive our creative initiatives across web and brand. When it comes to design and code, we\u2019re looking to work with experienced people who can pick up any problem and solve it. For us, it\u2019s both how it works and how it looks. At its core, Linear is a developer tool where speed, interactions, and small details matter. We expect a broad set of design skills and the ability to create high-quality designs, interactions, and prototypes.\n\nIn this role, you will help communicate Linear's story\u2014what we're building and why it matters\u2014as part of our internal creative agency: the Magic Team.\n\nWhat you'll do\n\n - You will be responsible for building complex and interactive UI web/app experiences\n\n - Build beautiful, responsive websites, landing pages, and internal tools\n\n - Implement creative animations and interactions in code\n\n - Explore visual design in Figm"
+  },
+  {
+   "id": "12f8f208-0b9c-4569-bb3d-41c8a197029e",
+   "title": "Senior / Staff Product Engineer",
+   "department": "Product",
+   "team": "Engineering",
+   "employmentType": "FullTime",
+   "location": "North America",
+   "secondaryLocations": [],
+   "publishedAt": "2026-03-04T02:08:44.483+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Remote",
+   "address": {
+    "postalAddress": {
+     "addressCountry": "United States"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/linear/12f8f208-0b9c-4569-bb3d-41c8a197029e",
+   "applyUrl": "https://jobs.ashbyhq.com/linear/12f8f208-0b9c-4569-bb3d-41c8a197029e/application",
+   "descriptionHtml": "",
+   "descriptionPlain": "At Linear, we're building the product development system for teams and agents. AI is fundamentally changing how software gets built, and we\u2019re shaping the tools this new era requires. \n\nFounded in 2019, Linear has become the platform of choice for more than 40,000 companies (including OpenAI, Coinbase, and Ramp) to plan, build, and ship their products. Today, our team is distributed across North America, Europe, and Australia, and we\u2019re continuing to grow internationally. What unites us is relentless focus, fast execution, and a deep care for software craftsmanship.\n\nAs a small team, we\u2019re all generalists that work across the full stack (built in Typescript end-to-end). We\u2019re looking for experienced engineers that thrive in an environment of autonomy and individual responsibility to help us build the future of product development.\n\nLocation & work mode\n\nLinear is a remote-first company, with optional co-working offices in San Francisco, New York, and London. This role is open to candidates based in the US and Europe. You can work from anywhere within these regions. We value deep focus and async collaboration, with intentional moments to connect in person through team off-sites, optional co-working, and occasional travel.\n\nWhat you'll do\n\n - Work closely with founders and design to implement new concepts and ideas\n\n - Build AI-powered functionality into the core of Linear\n\n - Update our realtime collaborative content editor used across all internal surfaces\n\n - Build new user-"
+  }
+ ],
+ "apiVersion": "1"
+}

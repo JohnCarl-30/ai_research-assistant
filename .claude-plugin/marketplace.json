@@ -1,0 +1,22 @@
+{
+  "name": "scout-plugins",
+  "owner": {
+    "name": "Scout"
+  },
+  "description": "Scout: company research for Claude",
+  "plugins": [
+    {
+      "name": "scout",
+      "source": "./extension",
+      "description": "Research any company with no API keys: facts, tech stack, hiring, GitHub activity and red flags.",
+      "category": "research",
+      "tags": [
+        "company-research",
+        "job-search",
+        "no-api-key",
+        "github",
+        "mcp"
+      ]
+    }
+  ]
+}

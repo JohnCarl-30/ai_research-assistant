@@ -30,6 +30,8 @@ dependencies = [
     "ragas>=0.4.3,<0.5",
     "pgvector>=0.5.0,<0.6",
     "rank-bm25>=0.2.2,<0.3",
+    # GitHub research core, shared with the desktop extension in extension/.
+    "scout-mcp",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +42,9 @@ dev = [
     "httpx>=0.26.0",
     "ruff>=0.1.0",
 ]
+
+[tool.uv.sources]
+scout-mcp = { path = "extension", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -58,7 +63,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 # tests/eval makes real OpenAI calls and is opt-in via RUN_EVAL=1.
-testpaths = ["tests"]
+testpaths = ["tests", "extension/tests"]
 markers = [
     "eval: LLM-judged quality evaluation; requires RUN_EVAL=1 and an OpenAI key",
 ]

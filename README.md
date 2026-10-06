@@ -6,6 +6,8 @@ An AI-powered job search assistant that monitors job boards, researches companie
 
 - **Job Board Monitoring** - Scrape LinkedIn and Indeed for job opportunities
 - **Company Research** - AI-powered analysis of company mission, tech stack, and culture
+- **GitHub Signals** - Real tech stack and activity from the company's public GitHub org, via the GitHub MCP server
+- **Claude Desktop Extension & Claude Code Plugin** - Keyless company research for anyone, running locally ([extension/](extension/README.md))
 - **Cover Letter Generation** - Personalized cover letters based on your skills and job requirements
 - **RAG-Based Matching** - Semantic job matching using vector embeddings
 - **Evaluation Harness** - LLM-as-judge quality measurement for all agents
@@ -138,6 +140,56 @@ postings); BM25 alone misses paraphrase.
 `/api/rag/ask` answers strictly from retrieved chunks and refuses when they do not
 contain the answer — that constraint is what makes the faithfulness metric meaningful.
 
+## GitHub research
+
+When `GITHUB_TOKEN` is set, company research also reads the company's public GitHub
+organisation through the remote GitHub MCP server. The implementation lives in
+`extension/src/scout_mcp/github.py`, shared with the desktop extension, and
+`app/agents/github_research.py` configures it from `Settings`:
+
+1. Guess org logins from the company name (and domain, when known), and take the first
+   that has repos: `search_repositories` with `org:<login>`, sorted by stars.
+2. Count repo languages across the top 10 non-fork repos.
+3. For the top 3 repos, list the root and read any dependency manifests
+   (`package.json`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `Gemfile`)
+   to find frameworks.
+
+The result goes into the research prompt as evidence for `tech_stack`. It carries a match
+confidence: `high` when a repo homepage is on the company's domain, `medium` when the
+login came from the domain, and `low` when it was only guessed from the name. A `low`
+match may be a different company with a similar name.
+
+It is deterministic (no LLM calls) and read-only. The session is opened with the server's
+read-only header, and the client refuses any tool other than `search_repositories` and
+`get_file_contents`. A fine-grained token with public-repository read access is enough.
+Without a token, or if the server can't be reached, research runs as before.
+
+## Claude Desktop extension and Claude Code plugin
+
+`extension/` packages Scout's company research as a one-click Claude Desktop
+extension (`.mcpb`) and as a Claude Code plugin, so anyone can install it. It runs on
+the user's computer, uses their own Claude, and needs no server, database or API keys
+of any kind. Ask Claude about a company and the `research_company` tool builds a
+dossier from keyless public sources: Wikidata facts, the website's tech stack, DNS
+(email and SaaS tools), public job boards (hiring and the technologies job posts
+name), GitHub, Hacker News and previously saved notes. Claude adds news with its own
+web search and writes a cited brief. Notes are kept in a local SQLite file.
+
+In Claude Code:
+
+```
+/plugin marketplace add <owner>/ai_research-assistant
+/plugin install scout@scout-plugins
+/scout:research-company Linear
+```
+
+Replace `<owner>` with the GitHub account or organisation that hosts this
+repository.
+
+It is a standalone package (`scout-mcp`). The backend depends on it for the shared
+GitHub code, and it never depends on the backend. See [extension/README.md](extension/README.md)
+to install, build and test it.
+
 ## Configuration
 
 Create a `.env` file with the following variables:
@@ -159,6 +211,9 @@ SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 EMAIL_RECIPIENT=your-email@gmail.com
+
+# GitHub research (optional, read-only public-repo token)
+GITHUB_TOKEN=github_pat_...
 ```
 
 ## Development

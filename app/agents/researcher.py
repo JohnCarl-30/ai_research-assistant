@@ -1,9 +1,14 @@
+import logging
+
 import httpx
 from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
+from app.agents.github_research import ToolCaller, research_github
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -23,15 +28,25 @@ async def fetch_company_website(url: str) -> str:
     return ""
 
 
-async def research_company(company_name: str, domain: str | None = None) -> dict:
+async def research_company(
+    company_name: str, domain: str | None = None, github: ToolCaller | None = None
+) -> dict:
     website_text = ""
     if domain:
         website_text = await fetch_company_website(f"https://{domain}")
+
+    github_profile = None
+    if github is not None:
+        try:
+            github_profile = await research_github(company_name, github, domain=domain)
+        except Exception as e:
+            logger.warning("GitHub research failed for %s: %s", company_name, e)
 
     prompt = f"""Research this company and provide a structured analysis.
 
 Company: {company_name}
 Website content: {website_text[:2000] if website_text else "Not available"}
+GitHub signals: {github_profile.to_prompt() if github_profile else "Not available"}
 
 Provide a JSON-like response with these fields:
 - mission: Company's mission statement or main purpose (1-2 sentences)
@@ -41,7 +56,14 @@ Provide a JSON-like response with these fields:
 - funding_stage: If known (e.g., "seed", "series_a", "series_b", "public", "unknown")
 - summary: Brief company summary (2-3 sentences)
 
-Be concise and factual. If you're unsure about something, say "unknown"."""
+Be concise and factual. If you're unsure about something, say "unknown".
+When GitHub signals are available, base tech_stack on them rather than on
+general knowledge. If the match confidence is "low", the org may belong to a
+different company with a similar name: only use it if the repos fit the company."""
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
-    return {"raw_response": response.content, "company_name": company_name}
+    return {
+        "raw_response": response.content,
+        "company_name": company_name,
+        "github": github_profile.to_dict() if github_profile else None,
+    }

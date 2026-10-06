@@ -41,6 +41,27 @@ async def test_wikidata_by_website_is_trusted():
     assert "P856%3Dhttps%3A%2F%2Fstripe.com%2F" in search_url
 
 
+async def test_wikidata_prefers_the_company_to_its_product_on_the_same_site():
+    # tailscale.com is the website of both Tailscale Inc. and Tailscale the VPN.
+    def row(qid, label, **extra):
+        r = {"item": {"value": f"http://www.wikidata.org/entity/{qid}"},
+             "itemLabel": {"value": label}, "website": {"value": "https://tailscale.com/"}}
+        return r | {k: {"value": v} for k, v in extra.items()}
+
+    sparql = {"results": {"bindings": [
+        row("Q141088012", "Tailscale"),
+        row("Q108766392", "Tailscale Inc.", inception="2019-01-01T00:00:00Z",
+            hqLabel="Toronto"),
+    ]}}
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": [{"title": "Q141088012"},
+                                                        {"title": "Q108766392"}]}}),
+        "sparql": json.dumps(sparql),
+    })
+    result = await wikidata.lookup(fetcher, "Tailscale", "tailscale.com")
+    assert result.facts.wikidata_id == "Q108766392"
+
+
 async def test_wikidata_never_guesses_between_similar_names():
     # The real candidates for "Linear": none is Linear the issue tracker.
     fetcher = FakeFetcher({

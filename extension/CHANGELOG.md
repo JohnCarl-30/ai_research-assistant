@@ -26,7 +26,13 @@ Desktop and plugin for Claude Code.
   accuracy drops below 90%, so a source that changes or blocks Scout is
   caught within a week.
 
+### Fixed
+- When a company and its product share a website on Wikidata (Tailscale,
+  Hugging Face), the company's entry is used.
+
 ### Changed
+- The accuracy eval covers 35 companies, now including smaller, European and
+  non-tech ones (Mollie, Doctolib, Celonis, Pleo, Bosch, Patagonia, IKEA...).
 - The optional GitHub token is now a setting in the install form, stored as a
   secret, instead of the `GITHUB_TOKEN` environment variable: Scout no longer
   reads credentials you set in your shell for other tools.

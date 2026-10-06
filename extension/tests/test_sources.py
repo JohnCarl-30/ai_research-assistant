@@ -62,6 +62,24 @@ async def test_wikidata_prefers_the_company_to_its_product_on_the_same_site():
     assert result.facts.wikidata_id == "Q108766392"
 
 
+async def test_wikidata_matches_any_of_an_items_websites():
+    # Doctolib's item lists doctolib.de first, then doctolib.fr and others.
+    def row(site):
+        return {"item": {"value": "http://www.wikidata.org/entity/Q22248343"},
+                "itemLabel": {"value": "Doctolib"}, "website": {"value": site}}
+
+    sparql = {"results": {"bindings": [row("https://www.doctolib.de/"),
+                                       row("https://www.doctolib.fr/"),
+                                       row("https://about.doctolib.com/")]}}
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": [{"title": "Q22248343"}]}}),
+        "sparql": json.dumps(sparql),
+    })
+    result = await wikidata.lookup(fetcher, "Doctolib", "doctolib.fr")
+    assert result.facts.wikidata_id == "Q22248343"
+    assert result.facts.website == "https://www.doctolib.fr/"
+
+
 async def test_wikidata_never_guesses_between_similar_names():
     # The real candidates for "Linear": none is Linear the issue tracker.
     fetcher = FakeFetcher({
@@ -470,3 +488,33 @@ async def test_a_board_failing_on_its_own_host_is_an_error():
 
     with pytest.raises(FetchError):
         await jobs.fetch_board(Down({}), "personio", "acme")
+
+
+def test_board_employers_are_read_where_boards_name_them():
+    assert jobs.employer_of("smartrecruiters",
+                            json.loads(fixture("smartrecruiters_bosch.json"))) == "Bosch Group"
+    assert jobs.employer_of("recruitee", json.loads(fixture("recruitee_bunq.json"))) == "bunq"
+    assert jobs.employer_of("workable",
+                            json.loads(fixture("workable_destinus.json"))) == "Destinus"
+    assert jobs._personio_employer(fixture("personio_personio.xml")) == "Personio SE & Co. KG"
+    assert jobs.employer_of("greenhouse", {"jobs": []}) is None
+
+
+def test_same_employer_tolerates_legal_names_but_not_strangers():
+    assert jobs.same_employer("Personio", "Personio SE & Co. KG")
+    assert jobs.same_employer("Bosch", "Bosch Group")
+    assert jobs.same_employer("Hugging Face", "HuggingFace")
+    assert not jobs.same_employer("Personio", "FD Sandbox")
+
+
+async def test_a_guessed_board_of_another_employer_is_skipped():
+    # personio.recruitee.com is a vendor sandbox ("FD Sandbox"), not Personio's.
+    sandbox = json.loads(fixture("recruitee_bunq.json"))
+    for offer in sandbox["offers"]:
+        offer["company_name"] = "FD Sandbox"
+    fetcher = FakeFetcher({
+        "personio.recruitee.com": json.dumps(sandbox),
+        "personio.jobs.personio.de": fixture("personio_personio.xml"),
+    })
+    h = await jobs.find_hiring(fetcher, [], guesses=["personio"], company="Personio")
+    assert (h.board, h.employer) == ("personio", "Personio SE & Co. KG")

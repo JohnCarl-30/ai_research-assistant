@@ -47,6 +47,9 @@ class CompanyFacts:
     name: str
     description: str | None = None
     website: str | None = None
+    # Every official website: an item can have one per country (doctolib.de,
+    # doctolib.fr), and the first isn't necessarily the one asked about.
+    websites: list[str] = field(default_factory=list)
     founded: str | None = None
     employees: int | None = None
     employees_as_of: str | None = None
@@ -128,6 +131,8 @@ def parse_facts(sparql_json: dict) -> dict[str, CompanyFacts]:
         facts = out.setdefault(qid, CompanyFacts(wikidata_id=qid, name=v("itemLabel") or qid))
         facts.description = facts.description or v("itemDescription")
         facts.website = facts.website or v("website")
+        if v("website") and v("website") not in facts.websites:
+            facts.websites.append(v("website"))
         facts.github = facts.github or v("github")
         if v("inception"):
             facts.founded = v("inception")[:4]
@@ -165,7 +170,12 @@ async def lookup(fetcher: Fetcher, company: str, domain: str | None) -> Lookup:
         statements = "|".join(f"P856={url}" for url in website_variants(domain))
         qids = await _search(fetcher, f"haswbstatement:{statements}", limit=5)
         facts = await _facts(fetcher, qids)
-        matches = [f for f in facts.values() if _domain_root(f.website) == domain]
+        matches = []
+        for f in facts.values():
+            site = next((w for w in f.websites if _domain_root(w) == domain), None)
+            if site:
+                f.website = site
+                matches.append(f)
         if not matches:
             return Lookup()
         # A product can share the company's website (Hugging Face Hub,

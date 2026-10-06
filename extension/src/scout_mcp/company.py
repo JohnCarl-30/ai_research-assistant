@@ -163,7 +163,7 @@ async def research_company(
         linked = site_info.job_boards if site_info else []
         try:
             hiring = await jobs.find_hiring(
-                fetcher, linked, candidate_org_slugs(d.company, d.domain)
+                fetcher, linked, candidate_org_slugs(d.company, d.domain), d.company
             )
         except Exception as e:
             d.gaps.append(f"Job board lookup failed: {e}")
@@ -185,8 +185,9 @@ async def research_company(
         call = github_rest_caller(fetcher, github_token)
         try:
             profile = await research_github(d.company, call, domain=d.domain, org=org)
-            if (profile is None or profile.confidence == "low") and not org and d.domain:
-                # Last resort: an org whose GitHub profile lists the company's site.
+            if (profile is None or profile.confidence != "high") and not org and d.domain:
+                # A guessed org may be a namesake (Pleo's is pleo-io, not
+                # pleo): prefer the org whose GitHub profile lists the site.
                 listed = await find_org_by_website(fetcher, d.company, d.domain, github_token)
                 if listed:
                     profile = await research_github(d.company, call, domain=d.domain, org=listed)

@@ -148,3 +148,25 @@ async def test_github_profile_website_is_the_last_resort_for_the_org():
 
     assert (d.github["org"], d.github["org_source"], d.github["confidence"]) == (
         "gitlabhq", "github profile", "high")
+
+
+async def test_a_namesake_org_guessed_from_the_domain_loses_to_the_listed_one():
+    # pleo.io's org is pleo-io; "pleo" (guessed from the domain) is someone else.
+    def repos(owner):
+        return json.dumps({"items": [{"name": "app", "full_name": f"{owner}/app",
+                                      "language": "Kotlin", "owner": {"login": owner},
+                                      "default_branch": "main"}]})
+
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "search/repositories?q=org%3Apleo-io": repos("pleo-io"),
+        "search/repositories?q=org%3Apleo": repos("pleo"),
+        "search/users": json.dumps({"items": [{"login": "pleo"}, {"login": "pleo-io"}]}),
+        "/orgs/pleo-io": json.dumps({"blog": "https://www.pleo.io"}),
+        "/orgs/pleo": json.dumps({"blog": "https://pleo.example"}),
+    })
+
+    d = await research_company("Pleo", domain="pleo.io", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert (d.github["org"], d.github["org_source"]) == ("pleo-io", "github profile")

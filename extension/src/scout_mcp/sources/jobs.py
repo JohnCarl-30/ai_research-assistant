@@ -12,11 +12,12 @@ stack source that does not depend on the company publishing code.
 import asyncio
 import html
 import re
+import warnings
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 
 from scout_mcp.sources.http import HOUR, Fetcher, FetchError
 from scout_mcp.web import BlockedURLError
@@ -230,7 +231,9 @@ def parse_recruitee(data: dict) -> list[Job]:
 def parse_personio(xml_text: str, slug: str) -> list[Job]:
     # html.parser rather than an XML parser: it never expands entities, so a
     # hostile feed can't blow up memory (the "billion laughs" attack).
-    soup = BeautifulSoup(xml_text, "html.parser")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", XMLParsedAsHTMLWarning)
+        soup = BeautifulSoup(xml_text, "html.parser")
     jobs = []
     for p in soup.find_all("position"):
         def text(tag: str) -> str | None:

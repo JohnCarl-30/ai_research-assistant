@@ -6,6 +6,17 @@ Desktop and plugin for Claude Code.
 ## Unreleased
 
 ### Added
+- Memory: every dossier says what changed since Scout last researched the
+  company (`since_last_time`): open roles rising or falling, teams starting or
+  stopping hiring, technologies appearing in job posts or on the website, GitHub
+  going quiet, new Hacker News stories, headcount. New `what_changed` tool.
+- Watchlist: `watch_company`, `unwatch_company`, `list_watchlist` and
+  `check_watchlist`, a "Check my watchlist" prompt and a `/scout:watchlist`
+  skill.
+- Progress updates while a dossier is built.
+- Every tool declares an output schema and returns structured results.
+- Notes are readable as MCP resources, and `export_notes` writes them as
+  Markdown files with front matter (e.g. into an Obsidian vault).
 - Four more job boards: Workable, SmartRecruiters, Recruitee and Personio,
   common among European and smaller companies. Each is checked from links on
   the company's site and by name, all boards at once for each name.

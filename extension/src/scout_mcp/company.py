@@ -29,6 +29,7 @@ from scout_mcp.sources.github_rest import (
 from scout_mcp.sources.http import Fetcher
 
 DnsLookup = Callable[[str], Awaitable[dnsinfo.DnsInfo]]
+Progress = Callable[[int, str], Awaitable[None]]  # (step 1-3, what's happening)
 
 WEB_SEARCH_STEP = (
     "This dossier covers structured public sources only. Use your own web search "
@@ -71,8 +72,14 @@ async def research_company(
     notebook: Notebook | None,
     github_token: str | None = None,
     dns_lookup: DnsLookup | None = None,
+    progress: Progress | None = None,
 ) -> Dossier:
     dns_lookup = dns_lookup or dnsinfo.lookup
+
+    async def report(step: int, message: str) -> None:
+        if progress is not None:
+            await progress(step, message)
+
     d = Dossier(company=company.strip())
     if domain:
         d.domain, d.domain_source = _domain_root(domain), "given"
@@ -84,6 +91,7 @@ async def research_company(
         ]
 
     # 1. Identity.
+    await report(1, "Looking the company up on Wikidata")
     facts = None
     try:
         found = await wikidata.lookup(fetcher, d.company, d.domain)
@@ -133,6 +141,7 @@ async def research_company(
             d.gaps.append(f"Hacker News search failed: {e}")
 
     if d.domain:
+        await report(2, "Reading the website, DNS and Hacker News")
         await asyncio.gather(get_site(), get_dns(), get_hn())
 
     # A site that redirects to a subdomain (gitlab.com -> about.gitlab.com) is
@@ -193,6 +202,7 @@ async def research_company(
         else:
             d.github = {**profile.to_dict(), "org_source": source or "guess"}
 
+    await report(3, "Checking job boards and GitHub")
     await asyncio.gather(get_hiring(), get_github())
     d.next_steps.append(WEB_SEARCH_STEP)
     return d

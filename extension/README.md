@@ -13,6 +13,8 @@ public sources:
 - **Engineering** from its GitHub organisation: languages, frameworks, activity
 - **Hacker News** discussions of its launches and blog posts
 - **Your saved notes** about it
+- **What changed** since you last looked: hiring rising or falling, teams that
+  started or stopped hiring, new technologies in job posts, GitHub going quiet
 
 Claude adds recent news with its own web search, writes a cited brief, and saves
 it to a notebook stored only on your machine.
@@ -35,6 +37,7 @@ Use it:
 
 - `/scout:research-company Linear linear.app`: a full cited brief
 - `/scout:compare-companies Stripe, Adyen`: a side-by-side comparison
+- `/scout:watchlist`: what changed at the companies you follow
 - Or just ask: "what does Vercel build with?" Claude picks the skill up itself.
 
 ## Install in Claude Desktop
@@ -45,17 +48,34 @@ Use it:
 
 Turn on Claude's web search too: Scout covers structured sources and leaves news
 and reviews to it. In Claude Desktop you can also start from the **+** menu:
-**Research a company**, **Compare companies**, **Research a topic**.
+**Research a company**, **Compare companies**, **Check my watchlist**,
+**Research a topic**. Your notes are attachable from the same menu.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `research_company` | The dossier above, in one call. Pass `domain=` when you know the website |
+| `research_company` | The dossier above, in one call, with progress updates. Pass `domain=` when you know the website |
+| `what_changed` | Research again and compare with the last time (an earlier day) |
+| `watch_company` / `unwatch_company` / `list_watchlist` | Companies to follow (up to 25) |
+| `check_watchlist` | What changed at every watched company |
 | `read_page` | A public web page as plain text. Private and local network addresses are refused |
 | `github_research` | A company's GitHub org on its own: languages, frameworks, repos, activity |
 | `save_note` / `search_notes` / `list_notes` / `get_note` | Your local research notebook (search ranks by BM25) |
 | `delete_note` | Delete a note (marked destructive, so clients can ask you first) |
+| `export_notes` | Every note as a Markdown file, e.g. into an Obsidian vault |
+
+Every tool declares its output schema and returns structured results, and
+notes are also readable as resources (`scout://notes`, `scout://notes/<id>`).
+
+## Memory
+
+Each dossier leaves a small snapshot of its signals in `history.db`: open roles
+by team, technologies in job posts and on the website, GitHub activity, Hacker
+News stories and headcount, at most one per company per day. The next dossier is
+compared with the latest snapshot from an earlier day and says what changed in
+`since_last_time`, which no web search can tell you. A section Scout couldn't
+reach this time is never reported as "gone".
 
 ## How it stays accurate without keys
 
@@ -84,8 +104,8 @@ and reviews to it. In Claude Desktop you can also start from the **+** menu:
 
 ## Privacy
 
-Notes and a response cache are stored only in your notes folder (`notes.db`,
-`cache.db`). Scout contacts only these public services, and only to research the
+Notes, research snapshots, the watchlist and a response cache are stored only
+in your notes folder (`notes.db`, `history.db`, `cache.db`). Scout contacts only these public services, and only to research the
 company you asked about: `wikidata.org`, the company's own website, your normal
 DNS resolver, `hn.algolia.com`, `api.github.com` and `raw.githubusercontent.com`,
 and the job board APIs

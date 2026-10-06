@@ -30,7 +30,27 @@
   "tools": [
     {
       "name": "research_company",
-      "description": "Keyless company dossier: Wikidata facts, website tech stack, DNS, job boards, GitHub, Hacker News, saved notes"
+      "description": "Keyless company dossier: Wikidata facts, website tech stack, DNS, job boards, GitHub, Hacker News, saved notes, and what changed since last time"
+    },
+    {
+      "name": "what_changed",
+      "description": "What changed at a company since Scout last researched it"
+    },
+    {
+      "name": "watch_company",
+      "description": "Add a company to your watchlist"
+    },
+    {
+      "name": "unwatch_company",
+      "description": "Remove a company from your watchlist"
+    },
+    {
+      "name": "list_watchlist",
+      "description": "The companies on your watchlist"
+    },
+    {
+      "name": "check_watchlist",
+      "description": "Re-research every watched company and report what changed"
     },
     {
       "name": "read_page",
@@ -59,6 +79,10 @@
     {
       "name": "delete_note",
       "description": "Delete a saved note"
+    },
+    {
+      "name": "export_notes",
+      "description": "Export saved notes as Markdown files (e.g. into an Obsidian vault)"
     }
   ],
   "tools_generated": false,

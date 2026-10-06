@@ -9,10 +9,10 @@ from typing import Annotated, TypedDict
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
+from scout_mcp.sources.http import Fetcher
 from sqlalchemy import select
 
 from app.agents.cover_letter import generate_cover_letter
-from app.agents.github_research import open_github_research
 from app.agents.researcher import research_company
 from app.agents.scraper import JobScraper, ScrapedJob
 from app.database import async_session
@@ -89,16 +89,14 @@ async def extract_companies(state: PipelineState) -> dict:
 
 
 async def research_companies(state: PipelineState) -> dict:
-    """Research each company using AI."""
+    """Research each company: Scout's dossier, summarised by an LLM."""
     results = {}
-    # One GitHub MCP session for the whole batch; None when not configured.
-    async with open_github_research() as github:
-        for company_name in state.get("new_companies", [])[:10]:
-            try:
-                result = await research_company(company_name, github=github)
-                results[company_name] = result
-            except Exception as e:
-                results[company_name] = {"error": str(e)}
+    fetcher = Fetcher()
+    for company_name in state.get("new_companies", [])[:10]:
+        try:
+            results[company_name] = await research_company(company_name, fetcher=fetcher)
+        except Exception as e:
+            results[company_name] = {"error": str(e)}
     return {"companies_researched": results, "status": "researched"}
 
 

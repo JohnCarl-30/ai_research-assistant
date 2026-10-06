@@ -21,10 +21,15 @@ from dataclasses import dataclass, field
 from scout_mcp.github import _domain_root, candidate_org_slugs, research_github
 from scout_mcp.notes import Notebook
 from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
-from scout_mcp.sources.github_rest import GitHubRateLimitError, github_rest_caller
+from scout_mcp.sources.github_rest import (
+    GitHubRateLimitError,
+    find_org_by_website,
+    github_rest_caller,
+)
 from scout_mcp.sources.http import Fetcher
 
 DnsLookup = Callable[[str], Awaitable[dnsinfo.DnsInfo]]
+Progress = Callable[[int, str], Awaitable[None]]  # (step 1-3, what's happening)
 
 WEB_SEARCH_STEP = (
     "This dossier covers structured public sources only. Use your own web search "
@@ -67,8 +72,14 @@ async def research_company(
     notebook: Notebook | None,
     github_token: str | None = None,
     dns_lookup: DnsLookup | None = None,
+    progress: Progress | None = None,
 ) -> Dossier:
     dns_lookup = dns_lookup or dnsinfo.lookup
+
+    async def report(step: int, message: str) -> None:
+        if progress is not None:
+            await progress(step, message)
+
     d = Dossier(company=company.strip())
     if domain:
         d.domain, d.domain_source = _domain_root(domain), "given"
@@ -80,6 +91,7 @@ async def research_company(
         ]
 
     # 1. Identity.
+    await report(1, "Looking the company up on Wikidata")
     facts = None
     try:
         found = await wikidata.lookup(fetcher, d.company, d.domain)
@@ -129,6 +141,7 @@ async def research_company(
             d.gaps.append(f"Hacker News search failed: {e}")
 
     if d.domain:
+        await report(2, "Reading the website, DNS and Hacker News")
         await asyncio.gather(get_site(), get_dns(), get_hn())
 
     # A site that redirects to a subdomain (gitlab.com -> about.gitlab.com) is
@@ -156,7 +169,10 @@ async def research_company(
             d.gaps.append(f"Job board lookup failed: {e}")
             return
         if hiring is None:
-            d.gaps.append("No public Greenhouse, Lever or Ashby job board found.")
+            d.gaps.append(
+                "No public job board found (checked Greenhouse, Lever, Ashby, Workable, "
+                "SmartRecruiters, Recruitee and Personio)."
+            )
         else:
             d.hiring = hiring.to_dict()
 
@@ -166,10 +182,15 @@ async def research_company(
         if not org and site_info:
             org = _pick_org(site_info.github_orgs, d.company, d.domain)
             source = "website" if org else None
+        call = github_rest_caller(fetcher, github_token)
         try:
-            profile = await research_github(
-                d.company, github_rest_caller(fetcher, github_token), domain=d.domain, org=org
-            )
+            profile = await research_github(d.company, call, domain=d.domain, org=org)
+            if (profile is None or profile.confidence == "low") and not org and d.domain:
+                # Last resort: an org whose GitHub profile lists the company's site.
+                listed = await find_org_by_website(fetcher, d.company, d.domain, github_token)
+                if listed:
+                    profile = await research_github(d.company, call, domain=d.domain, org=listed)
+                    source = "github profile"
         except GitHubRateLimitError as e:
             d.gaps.append(str(e))
             return
@@ -181,6 +202,7 @@ async def research_company(
         else:
             d.github = {**profile.to_dict(), "org_source": source or "guess"}
 
+    await report(3, "Checking job boards and GitHub")
     await asyncio.gather(get_hiring(), get_github())
     d.next_steps.append(WEB_SEARCH_STEP)
     return d

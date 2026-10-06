@@ -163,15 +163,22 @@ async def _facts(fetcher: Fetcher, qids: list[str]) -> dict[str, CompanyFacts]:
 async def lookup(fetcher: Fetcher, company: str, domain: str | None) -> Lookup:
     if domain:
         statements = "|".join(f"P856={url}" for url in website_variants(domain))
-        qids = await _search(fetcher, f"haswbstatement:{statements}", limit=3)
+        qids = await _search(fetcher, f"haswbstatement:{statements}", limit=5)
         facts = await _facts(fetcher, qids)
-        for f in facts.values():
-            if _domain_root(f.website) == domain:
-                f.match = "website"
-                if _QID.match(f.name):  # no English label
-                    f.name = company
-                return Lookup(facts=f)
-        return Lookup()
+        matches = [f for f in facts.values() if _domain_root(f.website) == domain]
+        if not matches:
+            return Lookup()
+        # A product can share the company's website (Hugging Face Hub,
+        # Tailscale the VPN): prefer the item named like the company, then the
+        # one with company facts (founding, headcount, HQ, industry).
+        best = max(matches, key=lambda f: (
+            normalize_name(f.name) == normalize_name(company),
+            sum(bool(x) for x in (f.founded, f.employees, f.headquarters, f.industry)),
+        ))
+        best.match = "website"
+        if _QID.match(best.name):  # no English label
+            best.name = company
+        return Lookup(facts=best)
 
     classes = "|".join(f"P31={c}" for c in COMPANY_CLASSES)
     qids = await _search(fetcher, f"{company} haswbstatement:P856 haswbstatement:{classes}")

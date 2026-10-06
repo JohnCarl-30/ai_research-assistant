@@ -8,7 +8,11 @@ from fakes import FakeFetcher, fixture
 
 from scout_mcp.github import GitHubToolError, research_github
 from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
-from scout_mcp.sources.github_rest import GitHubRateLimitError, github_rest_caller
+from scout_mcp.sources.github_rest import (
+    GitHubRateLimitError,
+    find_org_by_website,
+    github_rest_caller,
+)
 from scout_mcp.sources.http import Cache, Fetcher, FetchError, Response
 
 # --- Wikidata -----------------------------------------------------------------
@@ -35,6 +39,27 @@ async def test_wikidata_by_website_is_trusted():
     assert result.facts.wikidata_id == "Q7624104" and result.facts.match == "website"
     search_url = fetcher.requests[0][0]
     assert "P856%3Dhttps%3A%2F%2Fstripe.com%2F" in search_url
+
+
+async def test_wikidata_prefers_the_company_to_its_product_on_the_same_site():
+    # tailscale.com is the website of both Tailscale Inc. and Tailscale the VPN.
+    def row(qid, label, **extra):
+        r = {"item": {"value": f"http://www.wikidata.org/entity/{qid}"},
+             "itemLabel": {"value": label}, "website": {"value": "https://tailscale.com/"}}
+        return r | {k: {"value": v} for k, v in extra.items()}
+
+    sparql = {"results": {"bindings": [
+        row("Q141088012", "Tailscale"),
+        row("Q108766392", "Tailscale Inc.", inception="2019-01-01T00:00:00Z",
+            hqLabel="Toronto"),
+    ]}}
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": [{"title": "Q141088012"},
+                                                        {"title": "Q108766392"}]}}),
+        "sparql": json.dumps(sparql),
+    })
+    result = await wikidata.lookup(fetcher, "Tailscale", "tailscale.com")
+    assert result.facts.wikidata_id == "Q108766392"
 
 
 async def test_wikidata_never_guesses_between_similar_names():
@@ -342,3 +367,106 @@ async def test_user_agent_carries_contact_details_and_errors_say_why(monkeypatch
     with pytest.raises(FetchError, match="respect our robot policy"):
         await Fetcher().get("https://www.wikidata.org/w/api.php", ttl=60)
     assert agents[0].startswith("ScoutResearchBot/") and "(https://" in agents[0]
+
+
+# --- More job boards (fixtures trimmed from real responses) -------------------
+
+
+def test_workable_from_a_real_board():
+    data = json.loads(fixture("workable_destinus.json"))
+    jobs_ = jobs.parse_workable(data)
+    assert jobs_[0].title == "Accounts Payable Accountant"
+    assert (jobs_[0].department, jobs_[0].location) == ("Finance", "Zürich, Switzerland")
+    assert jobs_[0].url.startswith("https://apply.workable.com/j/")
+
+
+def test_smartrecruiters_uses_the_reported_total():
+    data = json.loads(fixture("smartrecruiters_bosch.json"))
+    h = jobs.summarize("smartrecruiters", "BoschGroup", "guess",
+                       jobs.parse_smartrecruiters(data), data["totalFound"])
+    assert (h.open_roles, h.roles_analysed) == (4863, 2)
+    assert dict(h.by_department) == {"Sales": 1, "Engineering": 1}
+    assert h.sample_roles[0]["url"] == "https://jobs.smartrecruiters.com/BoschGroup/744000153869220"
+    assert h.remote_share == 0.5
+
+
+def test_recruitee_from_a_real_board():
+    h = jobs.summarize("recruitee", "bunq", "guess",
+                       jobs.parse_recruitee(json.loads(fixture("recruitee_bunq.json"))))
+    assert h.sample_roles[0]["title"] == "Website Lead"
+    assert ("Growth", 1) in h.by_department
+    assert h.sample_roles[0]["url"] == "https://careers.bunq.com/o/website-lead"
+
+
+def test_personio_xml():
+    parsed = jobs.parse_personio(fixture("personio_personio.xml"), "personio")
+    assert [j.title for j in parsed] == ["Staff Software Engineer, Data Platform",
+                                         "Account Executive"]
+    assert parsed[0].department == "Product and Tech" and parsed[0].location == "Munich"
+    assert parsed[1].remote
+    assert {"Kotlin", "Kafka", "PostgreSQL", "AWS"} <= set(dict(jobs.tech_mentions(parsed)))
+    assert parsed[0].url == "https://personio.jobs.personio.de/job/1834171"
+
+
+def test_personio_never_expands_entities():
+    bomb = ('<!DOCTYPE x [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;">]>'
+            "<workzag-jobs><position><name>&b;</name></position></workzag-jobs>")
+    (job,) = jobs.parse_personio(bomb, "acme")
+    assert len(job.title) < 20
+
+
+async def test_subdomain_boards_refuse_odd_names():
+    fetcher = FakeFetcher({})
+    assert await jobs.fetch_board(fetcher, "recruitee", "evil.com/x?") is None
+    assert fetcher.requests == []
+
+
+def test_new_boards_are_found_from_site_links():
+    page = """<a href="https://apply.workable.com/destinusgroup/">Jobs</a>
+              <a href="https://careers.smartrecruiters.com/BoschGroup">x</a>
+              <a href="https://bunq.recruitee.com/o/website-lead">y</a>
+              <a href="https://personio.jobs.personio.de/">z</a>
+              <a href="https://apply.workable.com/j/08E2533D71">a job, not a board</a>"""
+    assert jobs.boards_linked(page) == [
+        ("workable", "destinusgroup"), ("smartrecruiters", "BoschGroup"),
+        ("recruitee", "bunq"), ("personio", "personio"),
+    ]
+
+
+async def test_guesses_try_every_board_and_prefer_the_first_found():
+    fetcher = FakeFetcher({
+        "apply.workable.com/api/v1/widget/accounts/acme": fixture("workable_destinus.json"),
+        "acme.recruitee.com": fixture("recruitee_bunq.json"),
+    })
+    h = await jobs.find_hiring(fetcher, [], guesses=["acme"])
+    assert h.board == "workable"  # listed before recruitee
+
+
+async def test_org_found_by_its_github_profile_website():
+    fetcher = FakeFetcher({
+        "search/users": json.dumps({"items": [{"login": "gitlab-fan"}, {"login": "gitlabhq"}]}),
+        "/orgs/gitlab-fan": json.dumps({"login": "gitlab-fan", "blog": "https://example.org"}),
+        "/orgs/gitlabhq": json.dumps({"login": "gitlabhq", "blog": "https://about.gitlab.com"}),
+    })
+    assert await find_org_by_website(fetcher, "GitLab", "gitlab.com") == "gitlabhq"
+    # A lookalike whose site is someone else's is never accepted.
+    assert await find_org_by_website(fetcher, "GitLab", "gitlab.io") is None
+
+
+async def test_a_board_redirecting_to_the_vendor_site_is_no_board():
+    # netflix.jobs.personio.de redirects to personio.com, which rate limits.
+    class Redirected(FakeFetcher):
+        async def get(self, url, **kwargs):
+            raise FetchError(url, 429, "HTTP 429 from https://personio.com",
+                             final_url="https://personio.com")
+
+    assert await jobs.fetch_board(Redirected({}), "personio", "netflix") is None
+
+
+async def test_a_board_failing_on_its_own_host_is_an_error():
+    class Down(FakeFetcher):
+        async def get(self, url, **kwargs):
+            raise FetchError(url, 503, f"HTTP 503 from {url}")
+
+    with pytest.raises(FetchError):
+        await jobs.fetch_board(Down({}), "personio", "acme")

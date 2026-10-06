@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Trimmed from the real personio.jobs.personio.de feed (2026-10-06); the job description and the second position were added in the feed's own format, because the real sample had an empty description. -->
+
+<workzag-jobs>
+
+<position>
+    <id>1834171</id>
+    <subcompany>Personio SE &amp; Co. KG</subcompany>
+    <office>Munich</office>
+    <additionalOffices>
+        <office>Berlin</office>
+    </additionalOffices>
+    <department>Product and Tech</department>
+    <recruitingCategory>Engineering</recruitingCategory>
+    <name>Staff Software Engineer, Data Platform</name>
+    <jobDescriptions>
+        <jobDescription>
+            <name>Your role</name>
+            <value><![CDATA[<p>Build our data platform with Kotlin, Kafka and PostgreSQL on AWS.</p>]]></value>
+        </jobDescription>
+    </jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>experienced</seniority>
+    <schedule>full-time</schedule>
+    <createdAt>2024-11-13T14:10:41+00:00</createdAt>
+</position>
+
+<position>
+    <id>1834172</id>
+    <office>Remote</office>
+    <department>Sales</department>
+    <name>Account Executive</name>
+    <jobDescriptions></jobDescriptions>
+    <schedule>full-time</schedule>
+</position>
+
+</workzag-jobs>

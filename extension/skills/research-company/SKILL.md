@@ -2,7 +2,7 @@
 name: research-company
 description: Research a company and write a cited brief (what it does, size and stage, tech stack, hiring, culture, red flags, interview questions). Use when the user asks about a company, e.g. "research Stripe", "what does Linear build with", "is Vercel hiring", "I have an interview at <company>", "tell me about <company>".
 argument-hint: <company> [website domain]
-allowed-tools: WebSearch WebFetch mcp__plugin_scout_scout__research_company mcp__plugin_scout_scout__read_page mcp__plugin_scout_scout__github_research mcp__plugin_scout_scout__search_notes mcp__plugin_scout_scout__save_note
+allowed-tools: WebSearch WebFetch mcp__plugin_scout_scout__research_company mcp__plugin_scout_scout__what_changed mcp__plugin_scout_scout__read_page mcp__plugin_scout_scout__github_research mcp__plugin_scout_scout__search_notes mcp__plugin_scout_scout__save_note
 ---
 
 # Research a company
@@ -29,5 +29,7 @@ it. If no company was given, ask which one.
    - Questions to ask in an interview
    Say plainly what you could not find (see `gaps`). If `gaps` says GitHub's
    rate limit is used up, mention that GitHub details can be retried in an hour.
+   If `since_last_time` has changes (not the first visit), add a
+   "Since you last looked" section and lead with anything significant.
 4. `save_note` the brief, tagged with the company name in lowercase and
    `company`, so it turns up in later research.

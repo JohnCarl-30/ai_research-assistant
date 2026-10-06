@@ -5,8 +5,11 @@ name: Extension accuracy eval
 # The report shows on the run's summary page and is kept as an artifact, with
 # every response saved for offline replays (run_eval.py --replay).
 #
-# It fails only if Scout crashes: real companies change job boards and
-# websites, so a wrong answer is something to look at, not a build break.
+# On pull requests it fails only if Scout crashes: real companies change job
+# boards and websites, so a wrong answer is something to look at, not a build
+# break. The weekly run also fails when accuracy drops below 90%, so a source
+# that changes or starts blocking Scout (as Wikidata once did) is caught within
+# a week: GitHub emails the repository owner when a scheduled run fails.
 on:
   pull_request:
     branches: [main]
@@ -14,6 +17,8 @@ on:
       - "extension/src/**"
       - "extension/evals/**"
       - ".github/workflows/eval-extension.yml"
+  schedule:
+    - cron: "17 6 * * 1"  # Mondays, 06:17 UTC
   workflow_dispatch:
 
 permissions:
@@ -25,26 +30,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
         run: uv sync --extra dev
 
       - name: Run the eval
+        env:
+          MIN_ACCURACY: ${{ github.event_name == 'schedule' && '0.9' || '0' }}
         run: |
           uv run python extension/evals/run_eval.py \
             --record eval-tape \
-            --out eval-report.json
+            --out eval-report.json \
+            --min-accuracy "$MIN_ACCURACY"
 
       - name: Keep the report and the recorded responses
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: scout-eval
           path: |

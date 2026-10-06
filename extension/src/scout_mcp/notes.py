@@ -123,3 +123,26 @@ class Notebook:
             (match, limit),
         ).fetchall()
         return [(self._note(r), r["snip"]) for r in rows]
+
+    def export_markdown(self, folder: Path) -> list[Path]:
+        """Write every note to ``folder`` as Markdown with YAML front matter.
+
+        Files are named ``scout-<id>-<title>.md``, so re-exporting updates them
+        in place and nothing else in the folder is touched.
+        """
+        folder.mkdir(parents=True, exist_ok=True)
+        written = []
+        for row in self.db.execute("SELECT * FROM notes ORDER BY id").fetchall():
+            note = self._note(row)
+            slug = re.sub(r"[^a-z0-9]+", "-", note.title.lower()).strip("-")[:60] or "note"
+            path = folder / f"scout-{note.id}-{slug}.md"
+            front = ["---", f"scout_note_id: {note.id}", f"title: {json.dumps(note.title)}",
+                     f"created: {note.created_at}"]
+            if note.url:
+                front.append(f"source: {json.dumps(note.url)}")
+            if note.tags:
+                front.append(f"tags: [{', '.join(json.dumps(t) for t in note.tags)}]")
+            front.append("---")
+            path.write_text("\n".join(front) + f"\n\n# {note.title}\n\n{note.content}\n")
+            written.append(path)
+        return written

@@ -1,16 +1,12 @@
-"""GitHub research tool, against a fake GitHub MCP server. No network."""
+"""GitHub research, against a fake GitHub. No network."""
 
 import json
-
-from mcp.types import CallToolResult, EmbeddedResource, TextContent, TextResourceContents
 
 from scout_mcp.github import (
     ALLOWED_TOOLS,
     GitHubToolError,
-    _result_text,
     candidate_org_slugs,
     extract_frameworks,
-    open_github,
     research_github,
 )
 
@@ -131,22 +127,3 @@ async def test_research_github_falls_through_slugs_and_rates_name_guesses_low():
 
 async def test_research_github_returns_none_when_no_org_matches():
     assert await research_github("Nobody Ltd", FakeGitHub(orgs={}, files={})) is None
-
-
-def test_result_text_prefers_embedded_file_over_status_line():
-    result = CallToolResult(
-        content=[
-            TextContent(type="text", text="successfully downloaded text file"),
-            EmbeddedResource(
-                type="resource",
-                resource=TextResourceContents(uri="repo://a/b/contents/go.mod", text="module x"),
-            ),
-        ]
-    )
-    assert _result_text(result) == "module x"
-    assert _result_text(CallToolResult(content=[TextContent(type="text", text="{}")])) == "{}"
-
-
-async def test_open_github_is_none_without_token():
-    async with open_github(None) as github:
-        assert github is None

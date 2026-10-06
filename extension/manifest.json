@@ -16,6 +16,7 @@
       "command": "uv",
       "args": [
         "run",
+        "--locked",
         "--directory",
         "${__dirname}",
         "python",
@@ -23,14 +24,35 @@
         "scout_mcp"
       ],
       "env": {
-        "SCOUT_DATA_DIR": "${user_config.notes_directory}"
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}",
+        "SCOUT_GITHUB_TOKEN": "${user_config.github_token}"
       }
     }
   },
   "tools": [
     {
       "name": "research_company",
-      "description": "Keyless company dossier: Wikidata facts, website tech stack, DNS, job boards, GitHub, Hacker News, saved notes"
+      "description": "Keyless company dossier: Wikidata facts, website tech stack, DNS, job boards, GitHub, Hacker News, saved notes, and what changed since last time"
+    },
+    {
+      "name": "what_changed",
+      "description": "What changed at a company since Scout last researched it"
+    },
+    {
+      "name": "watch_company",
+      "description": "Add a company to your watchlist"
+    },
+    {
+      "name": "unwatch_company",
+      "description": "Remove a company from your watchlist"
+    },
+    {
+      "name": "list_watchlist",
+      "description": "The companies on your watchlist"
+    },
+    {
+      "name": "check_watchlist",
+      "description": "Re-research every watched company and report what changed"
     },
     {
       "name": "read_page",
@@ -59,6 +81,10 @@
     {
       "name": "delete_note",
       "description": "Delete a saved note"
+    },
+    {
+      "name": "export_notes",
+      "description": "Export saved notes as Markdown files (e.g. into an Obsidian vault)"
     }
   ],
   "tools_generated": false,
@@ -69,6 +95,13 @@
       "title": "Notes folder",
       "description": "Where your research notebook and cache are stored. Defaults to ~/.scout, shared with the Claude Code plugin.",
       "default": "${HOME}/.scout",
+      "required": false
+    },
+    "github_token": {
+      "type": "string",
+      "title": "GitHub token (optional)",
+      "description": "Not needed. A fine-grained token with read-only access to public repositories raises GitHub's search limit from 10 to 30 a minute.",
+      "sensitive": true,
       "required": false
     }
   },

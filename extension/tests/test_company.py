@@ -130,3 +130,21 @@ async def test_every_source_failing_still_returns_a_dossier():
     sources = ["Wikidata", "Website", "DNS", "Hacker News", "Job board", "GitHub"]
     for source in sources:
         assert any(g.startswith(source) for g in d.gaps), (source, d.gaps)
+
+
+async def test_github_profile_website_is_the_last_resort_for_the_org():
+    repos = {"items": [{"name": "gitlabhq", "full_name": "gitlabhq/gitlabhq", "language": "Ruby",
+                        "owner": {"login": "gitlabhq"}, "default_branch": "master"}]}
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "search/repositories?q=org%3Agitlabhq": json.dumps(repos),
+        "search/repositories": json.dumps({"items": []}),  # name guesses find nothing
+        "search/users": json.dumps({"items": [{"login": "gitlabhq"}]}),
+        "/orgs/gitlabhq": json.dumps({"blog": "https://about.gitlab.com"}),
+    })
+
+    d = await research_company("GitLab", domain="gitlab.com", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert (d.github["org"], d.github["org_source"], d.github["confidence"]) == (
+        "gitlabhq", "github profile", "high")

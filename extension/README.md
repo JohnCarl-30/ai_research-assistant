@@ -133,12 +133,17 @@ To release, set the new version everywhere it's recorded and note the changes:
 
 ```bash
 uv run python scripts/bump_extension_version.py 0.3.0   # from the repo root
-# then add a 0.3.0 section to extension/CHANGELOG.md
 ```
+
+It also renames the CHANGELOG's **Unreleased** section to `0.3.0`; that section
+becomes the release notes.
 
 After that's merged, push a tag `vX.Y.Z`, or run **Release extension** on `main`
 with **publish** ticked. The workflow tests, validates, packs `scout-X.Y.Z.mcpb`
 and attaches it to a GitHub Release.
+
+Signing the bundle and listing Scout in Anthropic's plugin directory are
+described in [PUBLISHING.md](../PUBLISHING.md).
 
 `tests/test_packaging.py` keeps the Desktop manifest, the plugin manifest and the
 marketplace in step: the same version, settings and tool names.

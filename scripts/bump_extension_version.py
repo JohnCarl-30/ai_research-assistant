@@ -3,9 +3,10 @@
     uv run python scripts/bump_extension_version.py 0.3.0
 
 Updates the Claude Desktop manifest, the Claude Code plugin manifest, the
-package metadata and ``__version__``, then refreshes both lock files. The
-release workflow publishes whatever version these say, and
-extension/tests/test_packaging.py fails if they ever disagree.
+package metadata and ``__version__``, turns the CHANGELOG's "Unreleased"
+section into this version's, then refreshes both lock files. The release
+workflow publishes whatever version these say, with that CHANGELOG section as
+its notes, and extension/tests/test_packaging.py fails if they ever disagree.
 """
 
 import argparse
@@ -13,13 +14,14 @@ import json
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
 
-def bump(root: Path, version: str) -> list[Path]:
+def bump(root: Path, version: str, today: date | None = None) -> list[Path]:
     """Write ``version`` into every place it is recorded; return the files changed."""
     if not SEMVER.match(version):
         raise ValueError(f"Not a version like 1.2.3: {version!r}")
@@ -42,6 +44,16 @@ def bump(root: Path, version: str) -> list[Path]:
             raise RuntimeError(f"No version found in {path}")
         path.write_text(text)
         changed.append(path)
+
+    changelog = ext / "CHANGELOG.md"
+    text = changelog.read_text()
+    if f"\n## {version} " not in text:
+        day = (today or date.today()).isoformat()
+        text, n = re.subn(r"(?m)^## Unreleased$", f"## {version} ({day})", text, count=1)
+        if n != 1:
+            raise RuntimeError(f"{changelog} has no '## Unreleased' section for {version}")
+        changelog.write_text(text)
+        changed.append(changelog)
     return changed
 
 
@@ -56,7 +68,7 @@ def main() -> int:
     if not args.no_lock:
         for directory in (ROOT / "extension", ROOT):
             subprocess.run(["uv", "lock"], cwd=directory, check=True)
-    print(f"Now add a {args.version} section to extension/CHANGELOG.md.")
+    print(f"Check the {args.version} section of extension/CHANGELOG.md: it is the release notes.")
     return 0
 
 

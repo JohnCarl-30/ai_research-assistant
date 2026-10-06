@@ -15,6 +15,9 @@ plugin**. Both share one notebook (`~/.scout` by default).
 /plugin install scout@scout-plugins
 ```
 
+Replace `<owner>` with the GitHub account or organisation that hosts this
+repository.
+
 Then add your keys with `/plugin configure scout@scout-plugins`. They're all
 optional, but add a Brave Search key (see the table below). Claude Code installs
 Python and the dependencies itself; you only need

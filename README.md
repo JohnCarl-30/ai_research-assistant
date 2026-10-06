@@ -181,6 +181,9 @@ In Claude Code:
 /scout:research-company Linear
 ```
 
+Replace `<owner>` with the GitHub account or organisation that hosts this
+repository.
+
 It is a standalone package (`scout-mcp`). The backend depends on it for the shared
 GitHub code, and it never depends on the backend. See [extension/README.md](extension/README.md)
 to install, build and test it.

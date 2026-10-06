@@ -3,7 +3,7 @@
 All notable changes to Scout, the company research extension for Claude
 Desktop and plugin for Claude Code.
 
-## Unreleased
+## 0.3.0 (2026-10-06)
 
 ### Added
 - Memory: every dossier says what changed since Scout last researched the

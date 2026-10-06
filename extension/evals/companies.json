@@ -7,7 +7,7 @@
     {"name": "Vercel", "domain": "vercel.com", "expect": {"github_org": "vercel", "job_board": ["greenhouse", "vercel"], "tech": ["Next.js", "TypeScript"]}, "verified": ["github_org", "job_board", "tech"]},
     {"name": "Palantir", "domain": "palantir.com", "expect": {"github_org": "palantir", "job_board": ["lever", "palantir"]}, "verified": ["github_org", "job_board"]},
     {"name": "Cloudflare", "domain": "cloudflare.com", "expect": {"github_org": "cloudflare", "job_board": ["greenhouse", "cloudflare"]}, "verified": ["github_org"], "believed": ["job_board"]},
-    {"name": "GitLab", "domain": "gitlab.com", "expect": {"github_org": "gitlabhq", "job_board": ["greenhouse", "gitlab"]}, "verified": ["github_org", "job_board"]},
+    {"name": "GitLab", "domain": "gitlab.com", "expect": {"github_org": "gitlabhq", "job_board": ["greenhouse", "gitlab"], "wikidata": "Q16639197"}, "verified": ["github_org", "job_board", "wikidata"], "note": "Wikidata lists the site as about.gitlab.com (found via the redirect) but has no GitHub account for GitLab, and gitlab.com doesn't link its GitHub mirror org (gitlabhq): a known miss, since GitLab's code lives on gitlab.com."},
     {"name": "Figma", "domain": "figma.com", "expect": {"github_org": "figma", "job_board": ["greenhouse", "figma"]}, "verified": ["github_org", "job_board"]},
     {"name": "Discord", "domain": "discord.com", "expect": {"github_org": "discord", "job_board": ["greenhouse", "discord"]}, "verified": ["github_org", "job_board"]},
     {"name": "Supabase", "domain": "supabase.com", "expect": {"github_org": "supabase", "job_board": ["ashby", "supabase"]}, "verified": ["github_org", "job_board"]},

@@ -58,6 +58,34 @@ async def test_site_links_make_hiring_and_github_exact(tmp_path):
     assert not any("greenhouse" in url or "lever" in url for url, _ in fetcher.requests)
 
 
+async def test_wikidata_found_under_the_subdomain_the_site_redirects_to():
+    sparql = {"results": {"bindings": [{
+        "item": {"value": "http://www.wikidata.org/entity/Q16639197"},
+        "itemLabel": {"value": "Q16639197"},
+        "website": {"value": "https://about.gitlab.com/"}}]}}
+
+    class Redirecting(FakeFetcher):
+        async def get(self, url, **kw):
+            response = await super().get(url, **kw)
+            if url == "https://gitlab.com/":
+                response.url = "https://about.gitlab.com/"
+            return response
+
+    fetcher = Redirecting({
+        "P856%3Dhttps%3A%2F%2Fgitlab.com": json.dumps({"query": {"search": []}}),
+        "P856%3Dhttps%3A%2F%2Fabout.gitlab.com": json.dumps(
+            {"query": {"search": [{"title": "Q16639197"}]}}),
+        "sparql": json.dumps(sparql),
+        "https://gitlab.com/": "<title>GitLab</title>",
+    })
+
+    d = await research_company("GitLab", domain="gitlab.com", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert d.facts["wikidata_id"] == "Q16639197" and d.facts["name"] == "GitLab"
+    assert not any(g.startswith("No Wikidata entry") for g in d.gaps)
+
+
 async def test_wikidata_supplies_the_domain_and_github_org():
     fetcher = FakeFetcher({
         "list=search": json.dumps({"query": {"search": [{"title": "Q7624104"}]}}),

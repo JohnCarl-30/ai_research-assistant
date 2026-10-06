@@ -1,4 +1,4 @@
-"""Company research signals from GitHub, gathered through the GitHub MCP server.
+"""Company research signals from a company's public GitHub organisation.
 
 A company's public GitHub organisation says more about its real tech stack than
 an LLM's memory does: which languages its repos are written in, which
@@ -8,11 +8,9 @@ prompt can cite.
 
 The gathering is deterministic (a fixed sequence of read-only tool calls, no
 LLM in the loop) so it is cheap, repeatable and testable offline. Everything
-talks to the server through a ``ToolCaller`` — ``(tool_name, args) -> text`` —
-so tests substitute a fake and production uses ``github_mcp_caller``.
-
-Shared by the Scout backend (``app.agents``) and the desktop extension, so it
-depends on nothing but the MCP SDK and httpx.
+talks to GitHub through a ``ToolCaller`` — ``(tool_name, args) -> text``, in the
+shape of the GitHub MCP server's two read-only tools — so tests substitute a
+fake and Scout uses the keyless adapter in ``sources.github_rest``.
 """
 
 import asyncio
@@ -20,21 +18,15 @@ import json
 import logging
 import re
 from collections import Counter
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AsyncExitStack, asynccontextmanager
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 from urllib.parse import urlparse
-
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
 
 logger = logging.getLogger(__name__)
 
 ToolCaller = Callable[[str, dict], Awaitable[str]]
 
-DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 
 # Read-only tools this module may call. The server is also opened with the
 # read-only header; this is the second lock on the same door.
@@ -284,77 +276,3 @@ async def research_github(
         ],
         last_pushed_at=max(pushed) if pushed else None,
     )
-
-
-def _result_text(result) -> str:
-    """Text of an MCP CallToolResult.
-
-    File reads come back as a status line plus an embedded resource holding
-    the file; the resource is the payload, so it wins when present.
-    """
-    texts, resources = [], []
-    for block in result.content:
-        resource = getattr(block, "resource", None)
-        if resource is not None and getattr(resource, "text", None) is not None:
-            resources.append(resource.text)
-        elif getattr(block, "text", None) is not None:
-            texts.append(block.text)
-    return "\n".join(resources or texts)
-
-
-def _root_cause(exc: BaseException) -> BaseException:
-    """The first leaf of nested exception groups (the MCP transport wraps errors)."""
-    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
-        exc = exc.exceptions[0]
-    return exc
-
-
-@asynccontextmanager
-async def github_mcp_caller(
-    token: str, url: str = DEFAULT_GITHUB_MCP_URL
-) -> AsyncIterator[ToolCaller]:
-    """A ToolCaller backed by one session on the remote GitHub MCP server."""
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "X-MCP-Toolsets": "repos",
-        "X-MCP-Readonly": "true",
-    }
-    async with (
-        httpx.AsyncClient(headers=headers, timeout=httpx.Timeout(30, read=60)) as http,
-        streamable_http_client(url, http_client=http) as (read, write, _),
-        ClientSession(read, write) as session,
-    ):
-        await session.initialize()
-
-        async def call(tool: str, args: dict) -> str:
-            if tool not in ALLOWED_TOOLS:
-                raise PermissionError(f"GitHub tool {tool!r} is not allowed")
-            result = await session.call_tool(tool, args)
-            text = _result_text(result)
-            if result.isError:
-                raise GitHubToolError(text)
-            return text
-
-        yield call
-
-
-@asynccontextmanager
-async def open_github(
-    token: str | None, url: str = DEFAULT_GITHUB_MCP_URL
-) -> AsyncIterator[ToolCaller | None]:
-    """A GitHub ToolCaller, or None when GitHub research is unavailable.
-
-    Unavailable means no token or the server could not be reached. Research is
-    an enrichment, so neither case is an error for the caller.
-    """
-    if not token:
-        yield None
-        return
-
-    async with AsyncExitStack() as stack:
-        try:
-            call = await stack.enter_async_context(github_mcp_caller(token, url))
-        except Exception as e:
-            logger.warning("GitHub MCP unavailable, researching without it: %s", _root_cause(e))
-            call = None
-        yield call

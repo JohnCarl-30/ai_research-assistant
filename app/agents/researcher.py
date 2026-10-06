@@ -1,11 +1,19 @@
+"""Company research for the pipeline: Scout's dossier, summarised by an LLM.
+
+The evidence comes from ``scout_mcp.company`` (extension/), the same keyless
+dossier the Claude Desktop extension and Claude Code plugin build: Wikidata
+facts, the website's tech stack, DNS, public job boards, GitHub and Hacker
+News. The LLM only condenses that evidence into the fields the backend stores.
+"""
+
+import json
 import logging
 
-import httpx
-from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from scout_mcp.company import research_company as build_dossier
+from scout_mcp.sources.http import Fetcher
 
-from app.agents.github_research import ToolCaller, research_github
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -14,39 +22,37 @@ settings = get_settings()
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.openai_api_key)
 
+# Dossier sections worth the prompt's tokens; the rest is bookkeeping.
+EVIDENCE = ("facts", "website", "dns", "hiring", "github", "hacker_news", "gaps")
 
-async def fetch_company_website(url: str) -> str:
-    try:
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, "lxml")
-                text = soup.get_text(separator=" ", strip=True)
-                return text[:3000]
-    except Exception:
-        pass
-    return ""
+
+def _evidence(dossier: dict) -> str:
+    evidence = {k: dossier.get(k) for k in EVIDENCE if dossier.get(k)}
+    hiring = evidence.get("hiring")
+    if hiring:
+        # Sample roles and links add length, not signal.
+        evidence["hiring"] = {k: v for k, v in hiring.items() if k != "sample_roles"}
+    return json.dumps(evidence, ensure_ascii=False, default=str)[:8000]
 
 
 async def research_company(
-    company_name: str, domain: str | None = None, github: ToolCaller | None = None
+    company_name: str, domain: str | None = None, fetcher: Fetcher | None = None
 ) -> dict:
-    website_text = ""
-    if domain:
-        website_text = await fetch_company_website(f"https://{domain}")
-
-    github_profile = None
-    if github is not None:
-        try:
-            github_profile = await research_github(company_name, github, domain=domain)
-        except Exception as e:
-            logger.warning("GitHub research failed for %s: %s", company_name, e)
+    try:
+        dossier = (await build_dossier(
+            company_name, domain=domain, fetcher=fetcher or Fetcher(),
+            notebook=None, github_token=settings.github_token,
+        )).to_dict()
+    except Exception as e:
+        # Research enriches a scan; it never fails one.
+        logger.warning("Dossier failed for %s: %s", company_name, e)
+        dossier = {"company": company_name, "domain": domain, "gaps": [f"Dossier failed: {e}"]}
 
     prompt = f"""Research this company and provide a structured analysis.
 
 Company: {company_name}
-Website content: {website_text[:2000] if website_text else "Not available"}
-GitHub signals: {github_profile.to_prompt() if github_profile else "Not available"}
+Website: {dossier.get("domain") or "unknown"}
+Evidence from public sources (JSON): {_evidence(dossier)}
 
 Provide a JSON-like response with these fields:
 - mission: Company's mission statement or main purpose (1-2 sentences)
@@ -57,13 +63,16 @@ Provide a JSON-like response with these fields:
 - summary: Brief company summary (2-3 sentences)
 
 Be concise and factual. If you're unsure about something, say "unknown".
-When GitHub signals are available, base tech_stack on them rather than on
-general knowledge. If the match confidence is "low", the org may belong to a
-different company with a similar name: only use it if the repos fit the company."""
+Base tech_stack on the evidence (website fingerprint, technologies named in job
+posts, GitHub) rather than on general knowledge, and size on the headcount and
+open roles. If the GitHub confidence is "low", the org may belong to a different
+company with a similar name: only use it if the repos fit the company."""
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     return {
         "raw_response": response.content,
         "company_name": company_name,
-        "github": github_profile.to_dict() if github_profile else None,
+        "domain": dossier.get("domain"),
+        "github": dossier.get("github"),
+        "dossier": dossier,
     }

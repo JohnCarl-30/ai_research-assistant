@@ -21,6 +21,7 @@
       "command": "uv",
       "args": [
         "run",
+        "--locked",
         "--directory",
         "${CLAUDE_PLUGIN_ROOT}",
         "python",
@@ -29,7 +30,8 @@
       ],
       "env": {
         "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv",
-        "SCOUT_DATA_DIR": "${user_config.notes_directory}"
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}",
+        "SCOUT_GITHUB_TOKEN": "${user_config.github_token}"
       }
     }
   },
@@ -38,6 +40,13 @@
       "type": "directory",
       "title": "Notes folder",
       "description": "Where your research notebook and cache are stored. Leave blank for ~/.scout, the same notebook the Claude Desktop extension uses.",
+      "required": false
+    },
+    "github_token": {
+      "type": "string",
+      "title": "GitHub token (optional)",
+      "description": "Not needed. A fine-grained token with read-only access to public repositories raises GitHub's search limit from 10 to 30 a minute, for researching many companies at once.",
+      "sensitive": true,
       "required": false
     }
   }

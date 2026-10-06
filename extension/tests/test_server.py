@@ -84,10 +84,19 @@ async def test_company_prompt_drives_the_dossier_tool(tmp_path):
 
 def test_blank_install_form_fields_mean_unset(monkeypatch, tmp_path):
     monkeypatch.setenv("SCOUT_DATA_DIR", "${user_config.notes_directory}")
-    monkeypatch.setenv("GITHUB_TOKEN", "")
+    monkeypatch.setenv("SCOUT_GITHUB_TOKEN", "${user_config.github_token}")
     config = Config.from_env()
     assert config.github_token is None
     assert config.data_dir == Path.home() / ".scout"
+
+
+def test_only_the_token_given_to_scout_is_used(monkeypatch):
+    # A token the user set for other tools is not Scout's to send anywhere.
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_from_the_shell")
+    monkeypatch.delenv("SCOUT_GITHUB_TOKEN", raising=False)
+    assert Config.from_env().github_token is None
+    monkeypatch.setenv("SCOUT_GITHUB_TOKEN", "github_pat_given")
+    assert Config.from_env().github_token == "github_pat_given"
 
 
 def _stripe_fetcher(employees: int = 8000) -> FakeFetcher:

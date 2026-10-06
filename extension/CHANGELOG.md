@@ -27,6 +27,11 @@ Desktop and plugin for Claude Code.
   caught within a week.
 
 ### Changed
+- The optional GitHub token is now a setting in the install form, stored as a
+  secret, instead of the `GITHUB_TOKEN` environment variable: Scout no longer
+  reads credentials you set in your shell for other tools.
+- The plugin starts its server with `uv run --locked`, so the locked
+  dependency versions are always the ones installed.
 - GitHub Actions moved to their Node 24 versions.
 
 ## 0.2.1 (2026-10-06)

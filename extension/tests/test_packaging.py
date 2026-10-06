@@ -24,9 +24,21 @@ def test_license_is_shipped_with_the_extension():
     assert (ROOT / "LICENSE").read_text() == (ROOT.parent / "LICENSE").read_text()
 
 
-def test_no_api_keys_are_asked_for():
-    assert set(MANIFEST["user_config"]) == set(PLUGIN["userConfig"]) == {"notes_directory"}
-    assert not any(c.get("sensitive") for c in MANIFEST["user_config"].values())
+def test_no_api_keys_are_required():
+    # The only credential is an optional GitHub token, stored as a secret.
+    assert set(MANIFEST["user_config"]) == set(PLUGIN["userConfig"]) == {
+        "notes_directory", "github_token"}
+    for settings in (MANIFEST["user_config"], PLUGIN["userConfig"]):
+        assert not any(c.get("required") for c in settings.values())
+        assert settings["github_token"]["sensitive"] is True
+        assert not settings["notes_directory"].get("sensitive")
+
+
+def test_plugin_meets_the_directory_launch_rules():
+    # The plugin directory blocks a "uv run" without --locked or --frozen.
+    for args in (PLUGIN["mcpServers"]["scout"]["args"], MANIFEST["server"]["mcp_config"]["args"]):
+        assert args[:2] == ["run", "--locked"]
+    assert (ROOT / "uv.lock").stat().st_size < 256 * 1024
 
 
 def test_plugin_passes_the_same_settings_as_the_desktop_bundle():

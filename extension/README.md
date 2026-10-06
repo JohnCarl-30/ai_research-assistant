@@ -44,7 +44,8 @@ Use it:
 
 1. Download `scout-<version>.mcpb` from the repository's Releases page.
 2. Double-click it, or drag it into **Settings → Extensions**.
-3. The only setting is where to keep your notes (default `~/.scout`).
+3. Settings: where to keep your notes (default `~/.scout`) and an optional
+   GitHub token. Neither is needed.
 
 Turn on Claude's web search too: Scout covers structured sources and leaves news
 and reviews to it. In Claude Desktop you can also start from the **+** menu:
@@ -94,9 +95,10 @@ reach this time is never reported as "gone".
 - **GitHub without a token:** Scout uses only GitHub's search API (10 searches a
   minute) and reads files from `raw.githubusercontent.com`, which doesn't count
   against GitHub's API quota. A company takes 1 to 4 searches, so you can research
-  several companies a minute, and results are cached for a day. A `GITHUB_TOKEN`
-  environment variable (read-only, public repositories) raises the search limit
-  to 30 a minute. In Claude Code, set it in the shell you start Claude from.
+  several companies a minute, and results are cached for a day. An optional
+  GitHub token in Scout's settings (read-only, public repositories) raises the
+  search limit to 30 a minute. It is stored as a secret by Claude, and Scout
+  never reads tokens you set in your shell for other tools.
 - **Small private companies** are often missing from Wikidata and may not use a
   public job board. The dossier will be thinner, and its `gaps` say where.
 - **DNS and website signals** show what a company has set up, not necessarily
@@ -145,7 +147,7 @@ marketplace in step: the same version, settings and tool names.
 
 It is a standard stdio MCP server, so any MCP client can run it:
 `uv run --directory /path/to/extension python -m scout_mcp`, optionally with
-`SCOUT_DATA_DIR` and `GITHUB_TOKEN` in the environment.
+`SCOUT_DATA_DIR` and `SCOUT_GITHUB_TOKEN` in the environment.
 
 ### Accuracy eval
 

@@ -12,7 +12,7 @@ GitHub's tiny keyless API quota (60 requests an hour):
   not used at all.
 
 Responses are cached for a day, and a rate-limit answer is raised as its own
-error instead of reading as "no org". An optional GITHUB_TOKEN raises the
+error instead of reading as "no org". An optional token raises the
 search allowance to 30 a minute.
 """
 

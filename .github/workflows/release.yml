@@ -98,6 +98,34 @@ jobs:
         working-directory: extension
         run: npx --yes "$MCPB" pack . "../scout-${{ steps.version.outputs.version }}.mcpb"
 
+      # Optional. With a code-signing certificate in the repository secrets
+      # MCPB_SIGNING_CERT and MCPB_SIGNING_KEY (PEM text; intermediates, if
+      # any, in MCPB_SIGNING_CHAIN), the bundle is signed so Claude Desktop
+      # shows it as from a verified publisher. Without them it ships unsigned.
+      - name: Sign the bundle
+        env:
+          CERT: ${{ secrets.MCPB_SIGNING_CERT }}
+          KEY: ${{ secrets.MCPB_SIGNING_KEY }}
+          CHAIN: ${{ secrets.MCPB_SIGNING_CHAIN }}
+          BUNDLE: scout-${{ steps.version.outputs.version }}.mcpb
+        run: |
+          if [ -z "$CERT" ] || [ -z "$KEY" ]; then
+            echo "No signing certificate configured; publishing unsigned."
+            exit 0
+          fi
+          dir="$(mktemp -d)"
+          trap 'rm -rf "$dir"' EXIT
+          printf '%s\n' "$CERT" > "$dir/cert.pem"
+          printf '%s\n' "$KEY" > "$dir/key.pem"
+          chmod 600 "$dir/key.pem"
+          args=(--cert "$dir/cert.pem" --key "$dir/key.pem")
+          if [ -n "$CHAIN" ]; then
+            printf '%s\n' "$CHAIN" > "$dir/chain.pem"
+            args+=(--intermediate "$dir/chain.pem")
+          fi
+          npx --yes "$MCPB" sign "${args[@]}" "$BUNDLE"
+          npx --yes "$MCPB" verify "$BUNDLE"
+
       - name: Keep the bundle as a workflow artifact
         uses: actions/upload-artifact@v6
         with:
@@ -112,7 +140,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          # The notes are this version's section of the CHANGELOG.
+          awk -v v="$VERSION" '/^## /{on = index($0, "## " v " ") == 1 || $0 == "## " v; next} on' \
+            extension/CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::extension/CHANGELOG.md has no section for $VERSION"
+            exit 1
+          fi
           gh release create "v$VERSION" "scout-$VERSION.mcpb" \
             --target "$GITHUB_SHA" \
             --title "Scout $VERSION" \
-            --generate-notes
+            --notes-file notes.md

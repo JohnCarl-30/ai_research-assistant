@@ -57,6 +57,13 @@ jobs:
         with:
           node-version: "22"
 
+      - uses: astral-sh/setup-uv@v7
+
+      # The plugin runs "uv run --locked", which refuses to start on a stale
+      # lock file; scripts/bump_extension_version.py refreshes it.
+      - name: Check the extension's lock file is current
+        run: uv lock --check --directory extension
+
       # Pinned to the versions the manifests were validated with locally.
       - name: Validate the Desktop manifest
         run: npx --yes @anthropic-ai/mcpb@2.1.2 validate extension/manifest.json

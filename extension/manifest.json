@@ -16,6 +16,7 @@
       "command": "uv",
       "args": [
         "run",
+        "--locked",
         "--directory",
         "${__dirname}",
         "python",
@@ -23,7 +24,8 @@
         "scout_mcp"
       ],
       "env": {
-        "SCOUT_DATA_DIR": "${user_config.notes_directory}"
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}",
+        "SCOUT_GITHUB_TOKEN": "${user_config.github_token}"
       }
     }
   },
@@ -93,6 +95,13 @@
       "title": "Notes folder",
       "description": "Where your research notebook and cache are stored. Defaults to ~/.scout, shared with the Claude Code plugin.",
       "default": "${HOME}/.scout",
+      "required": false
+    },
+    "github_token": {
+      "type": "string",
+      "title": "GitHub token (optional)",
+      "description": "Not needed. A fine-grained token with read-only access to public repositories raises GitHub's search limit from 10 to 30 a minute.",
+      "sensitive": true,
       "required": false
     }
   },

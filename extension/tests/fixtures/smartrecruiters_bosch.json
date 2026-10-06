@@ -1,0 +1,14 @@
+{"offset": 0, "limit": 2, "totalFound": 4863, "content": [
+ {"id": "744000153869220", "name": "Promotor de Ventas Bogotá (Experiencia en Canal Moderno)", "refNumber": "REF297883B",
+  "company": {"identifier": "BoschGroup", "name": "Bosch Group"}, "releasedDate": "2026-10-06T22:35:35.576Z",
+  "location": {"city": "Bogotá", "region": "Cundinamarca", "country": "co", "remote": false, "hybrid": false, "fullLocation": "Bogotá, Cundinamarca, Colombia"},
+  "industry": {"id": "mechanical_engineering", "label": "Mechanical Or Industrial Engineering"},
+  "department": {}, "function": {"id": "sales", "label": "Sales"},
+  "typeOfEmployment": {"id": "permanent", "label": "Full-time"}, "experienceLevel": {"id": "associate", "label": "Associate"},
+  "visibility": "PUBLIC", "ref": "https://api.smartrecruiters.com/v1/companies/BoschGroup/postings/744000153869220"},
+ {"id": "744000153869221", "name": "Senior Software Engineer (Embedded C++)", "refNumber": "REF297884C",
+  "company": {"identifier": "BoschGroup", "name": "Bosch Group"},
+  "location": {"city": "Stuttgart", "country": "de", "remote": true, "hybrid": false, "fullLocation": "Stuttgart, Baden-Württemberg, Germany"},
+  "department": {"label": "Engineering"}, "function": {"id": "engineering", "label": "Engineering"},
+  "typeOfEmployment": {"id": "permanent", "label": "Full-time"}, "visibility": "PUBLIC"}
+]}

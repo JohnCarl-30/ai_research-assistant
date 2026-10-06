@@ -6,6 +6,11 @@ Desktop and plugin for Claude Code.
 ## Unreleased
 
 ### Added
+- Four more job boards: Workable, SmartRecruiters, Recruitee and Personio,
+  common among European and smaller companies. Each is checked from links on
+  the company's site and by name, all boards at once for each name.
+- GitHub organisations are also found through GitHub's own record of an org's
+  website, for orgs whose name can't be guessed (GitLab's is "gitlabhq").
 - Weekly live accuracy eval that fails (and emails the repository owner) if
   accuracy drops below 90%, so a source that changes or blocks Scout is
   caught within a week.

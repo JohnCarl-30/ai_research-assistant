@@ -7,7 +7,8 @@ public sources:
 - **Facts** from Wikidata: website, founding year, headcount, headquarters, industry
 - **Tech stack** the company's website runs on (framework, hosting, analytics, support tools)
 - **Email and SaaS tools** from the domain's public DNS records
-- **Hiring** from its public job board (Greenhouse, Lever or Ashby): open roles by
+- **Hiring** from its public job board (Greenhouse, Lever, Ashby, Workable,
+  SmartRecruiters, Recruitee or Personio): open roles by
   team and location, remote share, and the technologies the job posts mention
 - **Engineering** from its GitHub organisation: languages, frameworks, activity
 - **Hacker News** discussions of its launches and blog posts
@@ -88,7 +89,8 @@ Notes and a response cache are stored only in your notes folder (`notes.db`,
 company you asked about: `wikidata.org`, the company's own website, your normal
 DNS resolver, `hn.algolia.com`, `api.github.com` and `raw.githubusercontent.com`,
 and the job board APIs
-(`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). There are no
+(`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`, `apply.workable.com`,
+`api.smartrecruiters.com`, `<company>.recruitee.com`, `<company>.jobs.personio.de`). There are no
 accounts, keys or telemetry. Requests identify Scout by a User-Agent naming the
 project (Wikimedia requires one with contact details); nothing about you is sent.
 

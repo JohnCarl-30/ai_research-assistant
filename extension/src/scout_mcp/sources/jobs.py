@@ -1,13 +1,15 @@
-"""Hiring signals from public job boards: Greenhouse, Lever and Ashby.
+"""Hiring signals from public job boards.
 
-All three publish a company's open roles as keyless JSON. The board name is
-usually the company's slug; when the company's own site links to its board,
-that exact name is used instead of a guess.
+Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee and Personio
+all publish a company's open roles without a key (Personio as XML, the rest as
+JSON). The board name is usually the company's slug; when the company's own
+site links to its board, that exact name is used instead of a guess.
 
 Job descriptions name the tools a team actually uses, so they are also a tech
 stack source that does not depend on the company publishing code.
 """
 
+import asyncio
 import html
 import re
 from collections import Counter
@@ -17,14 +19,26 @@ from typing import Literal
 from bs4 import BeautifulSoup
 
 from scout_mcp.sources.http import HOUR, Fetcher, FetchError
+from scout_mcp.web import BlockedURLError
 
-Board = Literal["greenhouse", "lever", "ashby"]
+Board = Literal[
+    "greenhouse", "lever", "ashby", "workable", "smartrecruiters", "recruitee", "personio"
+]
 
 BOARD_URLS: dict[Board, str] = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true",
     "lever": "https://api.lever.co/v0/postings/{slug}?mode=json",
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{slug}",
+    "workable": "https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true",
+    # Lists up to 100 postings without descriptions, plus the true total.
+    "smartrecruiters": "https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=100",
+    "recruitee": "https://{slug}.recruitee.com/api/offers/",
+    "personio": "https://{slug}.jobs.personio.de/xml",
 }
+
+# Boards whose name becomes part of the hostname: names are checked first.
+_SUBDOMAIN_BOARDS = {"recruitee", "personio"}
+_HOST_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 # Links on a company's site that name its board exactly.
 BOARD_LINKS: dict[Board, re.Pattern] = {
@@ -33,7 +47,12 @@ BOARD_LINKS: dict[Board, re.Pattern] = {
     ),
     "lever": re.compile(r"jobs\.(?:eu\.)?lever\.co/([A-Za-z0-9_.-]+)"),
     "ashby": re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.%-]+)"),
+    "workable": re.compile(r"apply\.workable\.com/([A-Za-z0-9_-]+)"),
+    "smartrecruiters": re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_-]+)"),
+    "recruitee": re.compile(r"([a-z0-9-]+)\.recruitee\.com"),
+    "personio": re.compile(r"([a-z0-9-]+)\.jobs\.personio\.(?:de|com)"),
 }
+_NOT_BOARD_NAMES = {"embed", "api", "v1", "j", "www", "app", "careers", "jobs"}
 
 # (label, pattern, case-sensitive). Ambiguous English words are matched
 # case-sensitively ("React" not "react to", "Go" not "go-to-market").
@@ -91,6 +110,9 @@ class Hiring:
     tech_mentions: list[tuple[str, int]] = field(default_factory=list)
     sample_roles: list[dict] = field(default_factory=list)
     board_url: str | None = None
+    # When the board lists only part of its roles (SmartRecruiters: 100), the
+    # breakdowns cover this many of the open_roles.
+    roles_analysed: int | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -153,11 +175,96 @@ def parse_ashby(data: dict) -> list[Job]:
     return jobs
 
 
-PARSERS = {"greenhouse": parse_greenhouse, "lever": parse_lever, "ashby": parse_ashby}
+def _place(*parts: str | None) -> str | None:
+    return ", ".join(p for p in parts if p) or None
+
+
+def parse_workable(data: dict) -> list[Job]:
+    jobs = []
+    for j in data.get("jobs", []):
+        jobs.append(Job(
+            title=j.get("title", ""),
+            department=j.get("department") or j.get("function"),
+            location=_place(j.get("city"), j.get("country")),
+            remote=bool(j.get("telecommuting")),
+            url=j.get("url") or j.get("shortlink"),
+            text=_plain(j.get("description")),
+        ))
+    return jobs
+
+
+def parse_smartrecruiters(data: dict) -> list[Job]:
+    jobs = []
+    for j in data.get("content", []):
+        location = j.get("location") or {}
+        company = (j.get("company") or {}).get("identifier")
+        jobs.append(Job(
+            title=j.get("name", ""),
+            department=(j.get("department") or {}).get("label")
+            or (j.get("function") or {}).get("label"),
+            location=location.get("fullLocation") or _place(location.get("city")),
+            remote=bool(location.get("remote")),
+            url=f"https://jobs.smartrecruiters.com/{company}/{j['id']}"
+            if company and j.get("id") else None,
+            text="",  # the listing has no descriptions
+        ))
+    return jobs
+
+
+def parse_recruitee(data: dict) -> list[Job]:
+    jobs = []
+    for j in data.get("offers", []):
+        if j.get("status", "published") != "published":
+            continue
+        jobs.append(Job(
+            title=j.get("title", ""),
+            department=j.get("department"),
+            location=j.get("location") or _place(j.get("city"), j.get("country")),
+            remote=bool(j.get("remote")),
+            url=j.get("careers_url"),
+            text=f"{_plain(j.get('description'))} {_plain(j.get('requirements'))}",
+        ))
+    return jobs
+
+
+def parse_personio(xml_text: str, slug: str) -> list[Job]:
+    # html.parser rather than an XML parser: it never expands entities, so a
+    # hostile feed can't blow up memory (the "billion laughs" attack).
+    soup = BeautifulSoup(xml_text, "html.parser")
+    jobs = []
+    for p in soup.find_all("position"):
+        def text(tag: str) -> str | None:
+            node = p.find(tag)
+            return node.get_text(" ", strip=True) if node else None
+
+        office = text("office")
+        descriptions = " ".join(
+            _plain(v.get_text()) for v in p.find_all("value")
+        )
+        jobs.append(Job(
+            title=text("name") or "",
+            department=text("department") or text("recruitingcategory"),
+            location=office,
+            remote="remote" in (office or "").lower(),
+            url=f"https://{slug}.jobs.personio.de/job/{text('id')}" if text("id") else None,
+            text=descriptions,
+        ))
+    return jobs
+
+
+PARSERS = {
+    "greenhouse": parse_greenhouse, "lever": parse_lever, "ashby": parse_ashby,
+    "workable": parse_workable, "smartrecruiters": parse_smartrecruiters,
+    "recruitee": parse_recruitee,
+}
 BOARD_PAGES = {
     "greenhouse": "https://job-boards.greenhouse.io/{slug}",
     "lever": "https://jobs.lever.co/{slug}",
     "ashby": "https://jobs.ashbyhq.com/{slug}",
+    "workable": "https://apply.workable.com/{slug}/",
+    "smartrecruiters": "https://jobs.smartrecruiters.com/{slug}",
+    "recruitee": "https://{slug}.recruitee.com/",
+    "personio": "https://{slug}.jobs.personio.de/",
 }
 
 
@@ -169,12 +276,16 @@ def tech_mentions(jobs: list[Job]) -> list[tuple[str, int]]:
     return counts.most_common(15)
 
 
-def summarize(board: Board, slug: str, source: str, jobs: list[Job]) -> Hiring:
+def summarize(
+    board: Board, slug: str, source: str, jobs: list[Job], total: int | None = None
+) -> Hiring:
+    partial = total is not None and total > len(jobs)
     return Hiring(
         board=board,
         slug=slug,
         board_source=source,
-        open_roles=len(jobs),
+        open_roles=total if partial else len(jobs),
+        roles_analysed=len(jobs) if partial else None,
         by_department=Counter(j.department or "Unspecified" for j in jobs).most_common(8),
         by_location=Counter(j.location or "Unspecified" for j in jobs).most_common(6),
         remote_share=round(sum(j.remote for j in jobs) / len(jobs), 2) if jobs else None,
@@ -192,7 +303,7 @@ def boards_linked(html_text: str) -> list[tuple[Board, str]]:
     found: list[tuple[Board, str]] = []
     for board, rx in BOARD_LINKS.items():
         for slug in rx.findall(html_text):
-            if slug.lower() not in {"embed", "api", "v1"} and (board, slug) not in found:
+            if slug.lower() not in _NOT_BOARD_NAMES and (board, slug) not in found:
                 found.append((board, slug))
     return found
 
@@ -204,20 +315,38 @@ BOARD_MAX_BYTES = 40_000_000
 BOARD_TTL = 6 * HOUR
 
 
-async def fetch_board(fetcher: Fetcher, board: Board, slug: str) -> list[Job] | None:
-    """The board's jobs, or None if this company has no such board."""
+async def fetch_board(
+    fetcher: Fetcher, board: Board, slug: str
+) -> tuple[list[Job], int | None] | None:
+    """The board's jobs and its total count if it reports one, or None if
+    this company has no such board."""
+    if board in _SUBDOMAIN_BOARDS:
+        slug = slug.lower()
+        if not _HOST_LABEL.match(slug):
+            return None
+    url = BOARD_URLS[board].format(slug=slug)
     try:
-        data = await fetcher.get_json(
-            BOARD_URLS[board].format(slug=slug), ttl=BOARD_TTL,
-            max_bytes=BOARD_MAX_BYTES, cache=False,
-        )
+        if board == "personio":
+            response = await fetcher.get(
+                url, ttl=BOARD_TTL, max_bytes=BOARD_MAX_BYTES, cache=False
+            )
+            if response.truncated:
+                raise FetchError(url, 413, f"Response from {url} is too large to read")
+            jobs, total = parse_personio(response.text, slug), None
+        else:
+            data = await fetcher.get_json(
+                url, ttl=BOARD_TTL, max_bytes=BOARD_MAX_BYTES, cache=False
+            )
+            jobs = PARSERS[board](data)
+            total = data.get("totalFound") if board == "smartrecruiters" else None
     except FetchError as e:
-        if e.status in (404, 400, 422):
+        if e.status in (404, 400, 410, 422):
             return None
         raise
-    jobs = PARSERS[board](data)
-    # Lever answers unknown boards with an empty list rather than a 404.
-    return jobs or None
+    except BlockedURLError:
+        return None  # a subdomain board whose name doesn't resolve: no such board
+    # Lever and SmartRecruiters answer unknown boards with an empty list.
+    return (jobs, total) if jobs else None
 
 
 async def _hiring_on(fetcher: Fetcher, board: Board, slug: str, source: str) -> Hiring | None:
@@ -226,8 +355,8 @@ async def _hiring_on(fetcher: Fetcher, board: Board, slug: str, source: str) -> 
     cache = fetcher.cache
     if cache is not None and (hit := cache.get(key, BOARD_TTL)) is not None:
         return Hiring(**{**hit["hiring"], "board_source": source}) if hit["hiring"] else None
-    jobs = await fetch_board(fetcher, board, slug)
-    hiring = summarize(board, slug, source, jobs) if jobs else None
+    found = await fetch_board(fetcher, board, slug)
+    hiring = summarize(board, slug, source, *found) if found else None
     if cache is not None:
         cache.set(key, {"hiring": hiring.to_dict() if hiring else None})
     return hiring
@@ -242,16 +371,23 @@ async def find_hiring(
     own. Only when nothing was found and some attempts failed is that an
     error (the board may exist on a service that was unreachable).
     """
-    attempts = [(b, s, "website") for b, s in linked]
-    attempts += [(b, s, "guess") for s in guesses for b in BOARD_URLS if (b, s) not in linked]
     errors: list[str] = []
-    for board, slug, source in attempts:
+
+    async def attempt(board: Board, slug: str, source: str) -> Hiring | None:
         try:
-            hiring = await _hiring_on(fetcher, board, slug, source)
+            return await _hiring_on(fetcher, board, slug, source)
         except Exception as e:
             errors.append(f"{board}: {e}")
-            continue
-        if hiring:
+            return None
+
+    for board, slug in linked:
+        if hiring := await attempt(board, slug, "website"):
+            return hiring
+    # Guesses: every board at once for each name, first board in order wins.
+    for slug in guesses:
+        boards = [b for b in BOARD_URLS if (b, slug) not in linked]
+        results = await asyncio.gather(*(attempt(b, slug, "guess") for b in boards))
+        if hiring := next((h for h in results if h), None):
             return hiring
     if errors:
         raise JobBoardsUnavailableError("; ".join(dict.fromkeys(errors)))

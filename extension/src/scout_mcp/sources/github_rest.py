@@ -20,7 +20,7 @@ import asyncio
 import json
 from urllib.parse import quote, urlencode
 
-from scout_mcp.github import ALLOWED_TOOLS, MANIFESTS, GitHubToolError, ToolCaller
+from scout_mcp.github import ALLOWED_TOOLS, MANIFESTS, GitHubToolError, ToolCaller, _domain_root
 from scout_mcp.sources.http import DAY, Fetcher, FetchError
 
 API = "https://api.github.com"
@@ -50,20 +50,50 @@ def _rate_limit_message(url: str) -> str:
             "(60 an hour); try again later.")
 
 
+async def _api(fetcher: Fetcher, url: str, token: str | None) -> str:
+    try:
+        return (await fetcher.get(url, ttl=DAY, headers=_headers(token))).text
+    except FetchError as e:
+        if e.status in (403, 429) and "rate limit" in str(e).lower():
+            raise GitHubRateLimitError(_rate_limit_message(url)) from e
+        if e.status in (404, 422):
+            # Not found, or a search on an org that doesn't exist: "not this one".
+            raise GitHubToolError(str(e)) from e
+        raise GitHubUnavailableError(str(e)) from e
+
+
+async def find_org_by_website(
+    fetcher: Fetcher, company: str, domain: str, token: str | None = None, checks: int = 3
+) -> str | None:
+    """The GitHub org whose profile website is the company's domain, if any.
+
+    For companies whose org name can't be guessed and isn't linked from their
+    site (GitLab's is "gitlabhq"). Costs one search plus up to ``checks``
+    profile reads, so it is only worth calling when the cheaper ways failed.
+    A match is GitHub's own record of the org's website, so it is trusted.
+    """
+    params = urlencode({"q": f"{company} type:org", "per_page": 5})
+    found = json.loads(await _api(fetcher, f"{API}/search/users?{params}", token))
+    for item in found.get("items", [])[:checks]:
+        login = item.get("login")
+        if not login:
+            continue
+        try:
+            profile = json.loads(await _api(fetcher, f"{API}/orgs/{quote(login)}", token))
+        except GitHubToolError:
+            continue
+        site = _domain_root(profile.get("blog") or "")
+        if site and (site == domain or site.endswith(f".{domain}")):
+            return login
+    return None
+
+
 def github_rest_caller(fetcher: Fetcher, token: str | None = None) -> ToolCaller:
     # Default branches seen in search results, so raw URLs name the right one.
     branches: dict[str, str] = {}
 
     async def api(url: str) -> str:
-        try:
-            return (await fetcher.get(url, ttl=DAY, headers=_headers(token))).text
-        except FetchError as e:
-            if e.status in (403, 429) and "rate limit" in str(e).lower():
-                raise GitHubRateLimitError(_rate_limit_message(url)) from e
-            if e.status in (404, 422):
-                # Not found, or a search on an org that doesn't exist: "not this one".
-                raise GitHubToolError(str(e)) from e
-            raise GitHubUnavailableError(str(e)) from e
+        return await _api(fetcher, url, token)
 
     async def raw(owner: str, repo: str, path: str) -> str | None:
         """A file's text, or None if the repository has no such file."""

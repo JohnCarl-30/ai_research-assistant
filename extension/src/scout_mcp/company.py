@@ -21,7 +21,11 @@ from dataclasses import dataclass, field
 from scout_mcp.github import _domain_root, candidate_org_slugs, research_github
 from scout_mcp.notes import Notebook
 from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
-from scout_mcp.sources.github_rest import GitHubRateLimitError, github_rest_caller
+from scout_mcp.sources.github_rest import (
+    GitHubRateLimitError,
+    find_org_by_website,
+    github_rest_caller,
+)
 from scout_mcp.sources.http import Fetcher
 
 DnsLookup = Callable[[str], Awaitable[dnsinfo.DnsInfo]]
@@ -156,7 +160,10 @@ async def research_company(
             d.gaps.append(f"Job board lookup failed: {e}")
             return
         if hiring is None:
-            d.gaps.append("No public Greenhouse, Lever or Ashby job board found.")
+            d.gaps.append(
+                "No public job board found (checked Greenhouse, Lever, Ashby, Workable, "
+                "SmartRecruiters, Recruitee and Personio)."
+            )
         else:
             d.hiring = hiring.to_dict()
 
@@ -166,10 +173,15 @@ async def research_company(
         if not org and site_info:
             org = _pick_org(site_info.github_orgs, d.company, d.domain)
             source = "website" if org else None
+        call = github_rest_caller(fetcher, github_token)
         try:
-            profile = await research_github(
-                d.company, github_rest_caller(fetcher, github_token), domain=d.domain, org=org
-            )
+            profile = await research_github(d.company, call, domain=d.domain, org=org)
+            if (profile is None or profile.confidence == "low") and not org and d.domain:
+                # Last resort: an org whose GitHub profile lists the company's site.
+                listed = await find_org_by_website(fetcher, d.company, d.domain, github_token)
+                if listed:
+                    profile = await research_github(d.company, call, domain=d.domain, org=listed)
+                    source = "github profile"
         except GitHubRateLimitError as e:
             d.gaps.append(str(e))
             return

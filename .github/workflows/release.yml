@@ -1,9 +1,15 @@
 name: Release extension
 
-# Push a tag vX.Y.Z (matching "version" in extension/manifest.json) to build
-# the Claude Desktop extension and publish it as a GitHub Release. Run it by
-# hand from the Actions tab for a dry run: same checks, and the .mcpb is kept
-# as a workflow artifact instead of being released.
+# Builds the Claude Desktop extension and publishes it as a GitHub Release,
+# in either of two ways:
+#
+# - Push a tag vX.Y.Z matching "version" in extension/manifest.json.
+# - Run it by hand on main with "publish" ticked: GitHub creates the tag
+#   v<version> on that commit and publishes the release. Useful where tags
+#   can't be pushed directly.
+#
+# Run it by hand without "publish" for a dry run: same checks, and the .mcpb
+# is kept as a workflow artifact instead of being released.
 #
 # Claude Code users install from the repository itself (the marketplace in
 # .claude-plugin/), so the release only needs to carry the Desktop bundle.
@@ -11,6 +17,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Tag this commit v<version> and publish the release (main only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,6 +48,20 @@ jobs:
         run: |
           if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match extension/manifest.json version $VERSION"
+            exit 1
+          fi
+
+      - name: Check a manual publish is allowed
+        if: inputs.publish
+        env:
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Publish by hand only from main (this run is on $GITHUB_REF)"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "::error::$TAG already exists; bump the version in extension/manifest.json"
             exit 1
           fi
 
@@ -79,12 +104,15 @@ jobs:
           name: scout-${{ steps.version.outputs.version }}.mcpb
           path: scout-${{ steps.version.outputs.version }}.mcpb
 
+      # On a tag push the tag already exists; on a manual publish, --target
+      # makes GitHub create it on the commit this run built.
       - name: Publish the GitHub Release
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "scout-$VERSION.mcpb" \
+          gh release create "v$VERSION" "scout-$VERSION.mcpb" \
+            --target "$GITHUB_SHA" \
             --title "Scout $VERSION" \
             --generate-notes

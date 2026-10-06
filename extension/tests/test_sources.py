@@ -451,3 +451,22 @@ async def test_org_found_by_its_github_profile_website():
     assert await find_org_by_website(fetcher, "GitLab", "gitlab.com") == "gitlabhq"
     # A lookalike whose site is someone else's is never accepted.
     assert await find_org_by_website(fetcher, "GitLab", "gitlab.io") is None
+
+
+async def test_a_board_redirecting_to_the_vendor_site_is_no_board():
+    # netflix.jobs.personio.de redirects to personio.com, which rate limits.
+    class Redirected(FakeFetcher):
+        async def get(self, url, **kwargs):
+            raise FetchError(url, 429, "HTTP 429 from https://personio.com",
+                             final_url="https://personio.com")
+
+    assert await jobs.fetch_board(Redirected({}), "personio", "netflix") is None
+
+
+async def test_a_board_failing_on_its_own_host_is_an_error():
+    class Down(FakeFetcher):
+        async def get(self, url, **kwargs):
+            raise FetchError(url, 503, f"HTTP 503 from {url}")
+
+    with pytest.raises(FetchError):
+        await jobs.fetch_board(Down({}), "personio", "acme")

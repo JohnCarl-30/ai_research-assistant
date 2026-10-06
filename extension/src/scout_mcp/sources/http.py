@@ -28,10 +28,12 @@ DAY = 24 * HOUR
 
 
 class FetchError(RuntimeError):
-    def __init__(self, url: str, status: int, message: str = ""):
+    def __init__(self, url: str, status: int, message: str = "", final_url: str | None = None):
         super().__init__(message or f"HTTP {status} from {url}")
         self.url = url
         self.status = status
+        # Where the error came from, after redirects.
+        self.final_url = final_url or url
 
 
 @dataclass
@@ -110,7 +112,7 @@ class Fetcher:
             )
 
         if not 200 <= response.status < 300:
-            raise FetchError(url, response.status, _error_message(response))
+            raise FetchError(url, response.status, _error_message(response), response.url)
         if use_cache and not response.truncated:
             self.cache.set(key, response.__dict__)
         return response

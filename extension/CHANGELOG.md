@@ -27,6 +27,8 @@ Desktop and plugin for Claude Code.
   caught within a week.
 
 ### Fixed
+- A company with no Personio or Recruitee board no longer reports the board
+  lookup as failed when the vendor's own site is busy.
 - When a company and its product share a website on Wikidata (Tailscale,
   Hugging Face), the company's entry is used.
 

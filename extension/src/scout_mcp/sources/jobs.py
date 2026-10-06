@@ -16,6 +16,7 @@ import warnings
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Literal
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 
@@ -344,6 +345,10 @@ async def fetch_board(
             total = data.get("totalFound") if board == "smartrecruiters" else None
     except FetchError as e:
         if e.status in (404, 400, 410, 422):
+            return None
+        if urlparse(e.final_url).hostname != urlparse(url).hostname:
+            # An unknown subdomain board redirects to the vendor's own site
+            # (Personio's is rate limited): no such board, not an outage.
             return None
         raise
     except BlockedURLError:

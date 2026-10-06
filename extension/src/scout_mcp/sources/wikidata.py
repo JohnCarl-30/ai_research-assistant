@@ -168,6 +168,8 @@ async def lookup(fetcher: Fetcher, company: str, domain: str | None) -> Lookup:
         for f in facts.values():
             if _domain_root(f.website) == domain:
                 f.match = "website"
+                if _QID.match(f.name):  # no English label
+                    f.name = company
                 return Lookup(facts=f)
         return Lookup()
 

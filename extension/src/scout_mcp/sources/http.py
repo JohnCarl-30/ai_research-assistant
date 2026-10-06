@@ -12,11 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from scout_mcp import __version__
 from scout_mcp.web import public_client
 
-# Wikimedia's policy requires a descriptive User-Agent; others appreciate one.
-USER_AGENT = f"ScoutResearch/{__version__} (company research MCP server; local, per-user)"
+# Wikimedia blocks requests (HTTP 403) whose User-Agent lacks contact details,
+# and asks bots to say so: "<client>/<version> (<contact>) <library>/<version>".
+CONTACT = "https://github.com/JohnCarl-30/ai_research-assistant"
+USER_AGENT = f"ScoutResearchBot/{__version__} ({CONTACT}) httpx/{httpx.__version__}"
 MAX_BYTES = 5_000_000
 
 HOUR = 3600
@@ -36,8 +40,12 @@ class Response:
     status: int
     headers: dict[str, str]
     text: str
+    truncated: bool = False  # the body was cut off at max_bytes
 
     def json(self) -> Any:
+        if self.truncated:
+            # Parsing a cut-off body fails with a baffling JSON error; say why.
+            raise FetchError(self.url, 413, f"Response from {self.url} is too large to read")
         return json.loads(self.text)
 
 
@@ -81,37 +89,63 @@ class Fetcher:
         ttl: float,
         headers: dict[str, str] | None = None,
         max_bytes: int = MAX_BYTES,
+        cache: bool = True,
     ) -> Response:
+        """GET a URL. ``cache=False`` skips the response cache, for bodies too
+        large to be worth storing (the caller can cache what it derives)."""
         # Credentials never go into the key: the cache is a plain file on disk.
         keyed = {k: v for k, v in (headers or {}).items() if k.lower() != "authorization"}
         key = f"GET {url} {json.dumps(keyed, sort_keys=True)}"
-        if self.cache is not None and (hit := self.cache.get(key, ttl)) is not None:
+        use_cache = cache and self.cache is not None
+        if use_cache and (hit := self.cache.get(key, ttl)) is not None:
             return Response(**hit)
 
+        try:
+            response = await self._fetch(url, headers, max_bytes)
+        except httpx.DecodingError:
+            # Some servers send compressed bodies httpx can't decode
+            # ("cannot use a decompressobj multiple times"); ask for plain.
+            response = await self._fetch(
+                url, {**(headers or {}), "Accept-Encoding": "identity"}, max_bytes
+            )
+
+        if not 200 <= response.status < 300:
+            raise FetchError(url, response.status, _error_message(response))
+        if use_cache and not response.truncated:
+            self.cache.set(key, response.__dict__)
+        return response
+
+    async def _fetch(self, url: str, headers: dict | None, max_bytes: int) -> Response:
         async with public_client(timeout=30) as client:
             client.headers["User-Agent"] = USER_AGENT
             async with client.stream("GET", url, headers=headers) as r:
                 body = bytearray()
+                truncated = False
                 async for chunk in r.aiter_bytes():
                     body += chunk
                     if len(body) > max_bytes:
+                        truncated = True
                         break
-                response = Response(
+                return Response(
                     url=str(r.url),
                     status=r.status_code,
                     headers={k.lower(): v for k, v in r.headers.items()},
                     text=body.decode(r.encoding or "utf-8", errors="replace"),
+                    truncated=truncated,
                 )
 
-        if not 200 <= response.status < 300:
-            raise FetchError(url, response.status, _error_message(response))
-        if self.cache is not None:
-            self.cache.set(key, response.__dict__)
-        return response
-
-    async def get_json(self, url: str, *, ttl: float, headers: dict | None = None) -> Any:
+    async def get_json(
+        self,
+        url: str,
+        *,
+        ttl: float,
+        headers: dict | None = None,
+        max_bytes: int = MAX_BYTES,
+        cache: bool = True,
+    ) -> Any:
         response = await self.get(
-            url, ttl=ttl, headers={"Accept": "application/json", **(headers or {})}
+            url, ttl=ttl, headers={"Accept": "application/json", **(headers or {})},
+            max_bytes=max_bytes, cache=cache,
         )
         return response.json()
 
@@ -119,6 +153,7 @@ class Fetcher:
 def _error_message(response: Response) -> str:
     try:
         detail = response.json().get("message", "")
-    except (ValueError, AttributeError):
-        detail = ""
+    except (ValueError, AttributeError, FetchError):
+        # Not JSON: a short excerpt usually says why (e.g. a policy block).
+        detail = " ".join(response.text.split())[:160]
     return f"HTTP {response.status} from {response.url}" + (f": {detail}" if detail else "")

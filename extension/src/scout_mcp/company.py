@@ -131,6 +131,20 @@ async def research_company(
     if d.domain:
         await asyncio.gather(get_site(), get_dns(), get_hn())
 
+    # A site that redirects to a subdomain (gitlab.com -> about.gitlab.com) is
+    # often on Wikidata under that host. Only subdomains: a redirect to another
+    # domain (an acquirer, say) would bring in a different company's facts.
+    if facts is None and site_info is not None:
+        final = _domain_root(site_info.url)
+        if final and final != d.domain and final.endswith(f".{d.domain}"):
+            try:
+                facts = (await wikidata.lookup(fetcher, d.company, final)).facts
+            except Exception:
+                facts = None  # the first lookup's gap already says what's missing
+            if facts:
+                d.facts = facts.to_dict()
+                d.gaps = [g for g in d.gaps if not g.startswith("No Wikidata entry")]
+
     # 3. Hiring and engineering, from exact accounts where known.
     async def get_hiring() -> None:
         linked = site_info.job_boards if site_info else []

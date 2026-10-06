@@ -1,21 +1,18 @@
 """GitHub research tool, against a fake GitHub MCP server. No network."""
 
 import json
-from types import SimpleNamespace
 
 from mcp.types import CallToolResult, EmbeddedResource, TextContent, TextResourceContents
 
-from app.agents import researcher
-from app.agents.github_research import (
+from scout_mcp.github import (
     ALLOWED_TOOLS,
     GitHubToolError,
     _result_text,
     candidate_org_slugs,
     extract_frameworks,
-    open_github_research,
+    open_github,
     research_github,
 )
-from app.config import get_settings
 
 
 def _repo(name, language, stars, homepage=None, fork=False, pushed="2026-09-01T00:00:00Z"):
@@ -150,42 +147,6 @@ def test_result_text_prefers_embedded_file_over_status_line():
     assert _result_text(CallToolResult(content=[TextContent(type="text", text="{}")])) == "{}"
 
 
-async def test_open_github_research_is_none_without_token():
-    settings = get_settings().model_copy(update={"github_token": None})
-    async with open_github_research(settings) as github:
+async def test_open_github_is_none_without_token():
+    async with open_github(None) as github:
         assert github is None
-
-
-async def test_research_company_survives_github_failure(monkeypatch):
-    prompts = []
-
-    async def fake_invoke(messages):
-        prompts.append(messages[0].content)
-        return SimpleNamespace(content="analysis")
-
-    async def broken(tool, args):
-        raise RuntimeError("connection reset")
-
-    monkeypatch.setattr(researcher, "llm", SimpleNamespace(ainvoke=fake_invoke))
-
-    result = await researcher.research_company("Acme", github=broken)
-
-    assert result["raw_response"] == "analysis"
-    assert result["github"] is None
-    assert "GitHub signals: Not available" in prompts[0]
-
-
-async def test_research_company_includes_github_signals(monkeypatch):
-    prompts = []
-
-    async def fake_invoke(messages):
-        prompts.append(messages[0].content)
-        return SimpleNamespace(content="analysis")
-
-    monkeypatch.setattr(researcher, "llm", SimpleNamespace(ainvoke=fake_invoke))
-    gh = FakeGitHub(orgs={"acme": ACME_REPOS}, files=ACME_FILES)
-
-    result = await researcher.research_company("Acme", github=gh)
-
-    assert result["github"]["org"] == "Acme"
-    assert "Frameworks in dependency manifests: fastapi, grpc" in prompts[0]

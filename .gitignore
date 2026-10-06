@@ -48,3 +48,7 @@ chroma_db/
 
 # LangSmith
 .langsmith/
+
+# Desktop extension build output
+*.mcpb
+extension/.venv/

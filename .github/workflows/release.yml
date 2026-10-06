@@ -1,0 +1,90 @@
+name: Release extension
+
+# Push a tag vX.Y.Z (matching "version" in extension/manifest.json) to build
+# the Claude Desktop extension and publish it as a GitHub Release. Run it by
+# hand from the Actions tab for a dry run: same checks, and the .mcpb is kept
+# as a workflow artifact instead of being released.
+#
+# Claude Code users install from the repository itself (the marketplace in
+# .claude-plugin/), so the release only needs to carry the Desktop bundle.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  MCPB: "@anthropic-ai/mcpb@2.1.2"
+  CLAUDE_CODE: "@anthropic-ai/claude-code@2.1.291"
+
+jobs:
+  release:
+    name: Build and publish scout.mcpb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the extension version
+        id: version
+        run: echo "version=$(jq -r .version extension/manifest.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check the tag matches the extension version
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match extension/manifest.json version $VERSION"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # The whole offline suite, including tests/test_packaging.py, which keeps
+      # the Desktop manifest, plugin manifest and marketplace in step.
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Lint the extension
+        run: uv run ruff check extension
+
+      - name: Validate the Desktop manifest
+        run: npx --yes "$MCPB" validate extension/manifest.json
+
+      - name: Validate the Claude Code plugin and marketplace
+        run: |
+          npx --yes "$CLAUDE_CODE" plugin validate extension --strict
+          npx --yes "$CLAUDE_CODE" plugin validate . --strict
+
+      - name: Pack the Desktop extension
+        working-directory: extension
+        run: npx --yes "$MCPB" pack . "../scout-${{ steps.version.outputs.version }}.mcpb"
+
+      - name: Keep the bundle as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-${{ steps.version.outputs.version }}.mcpb
+          path: scout-${{ steps.version.outputs.version }}.mcpb
+
+      - name: Publish the GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "scout-$VERSION.mcpb" \
+            --title "Scout $VERSION" \
+            --generate-notes

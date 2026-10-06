@@ -3,7 +3,7 @@
 All notable changes to Scout, the company research extension for Claude
 Desktop and plugin for Claude Code.
 
-## Unreleased
+## 0.3.0 (2026-10-06)
 
 ### Added
 - Memory: every dossier says what changed since Scout last researched the
@@ -27,6 +27,13 @@ Desktop and plugin for Claude Code.
   caught within a week.
 
 ### Fixed
+- Wikidata facts are found for companies with one website per country
+  (Doctolib, bunq, Patagonia): any of an item's websites can match.
+- A GitHub org guessed from the domain is checked against GitHub's record of
+  which org lists the company's site, so a namesake isn't taken (Pleo's org is
+  pleo-io, not pleo).
+- A job board guessed from the name is skipped when it names a different
+  employer (personio.recruitee.com is a vendor sandbox, not Personio).
 - A company with no Personio or Recruitee board no longer reports the board
   lookup as failed when the vendor's own site is busy.
 - When a company and its product share a website on Wikidata (Tailscale,

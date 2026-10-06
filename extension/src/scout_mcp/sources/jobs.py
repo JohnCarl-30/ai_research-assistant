@@ -115,6 +115,8 @@ class Hiring:
     # When the board lists only part of its roles (SmartRecruiters: 100), the
     # breakdowns cover this many of the open_roles.
     roles_analysed: int | None = None
+    # The employer the board names, on boards that name one.
+    employer: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -256,6 +258,13 @@ def parse_personio(xml_text: str, slug: str) -> list[Job]:
     return jobs
 
 
+def _personio_employer(xml_text: str) -> str | None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", XMLParsedAsHTMLWarning)
+        node = BeautifulSoup(xml_text, "html.parser").find("subcompany")
+    return node.get_text(" ", strip=True) or None if node else None
+
+
 PARSERS = {
     "greenhouse": parse_greenhouse, "lever": parse_lever, "ashby": parse_ashby,
     "workable": parse_workable, "smartrecruiters": parse_smartrecruiters,
@@ -281,7 +290,8 @@ def tech_mentions(jobs: list[Job]) -> list[tuple[str, int]]:
 
 
 def summarize(
-    board: Board, slug: str, source: str, jobs: list[Job], total: int | None = None
+    board: Board, slug: str, source: str, jobs: list[Job], total: int | None = None,
+    employer: str | None = None,
 ) -> Hiring:
     partial = total is not None and total > len(jobs)
     return Hiring(
@@ -299,6 +309,7 @@ def summarize(
             for j in jobs[:10]
         ],
         board_url=BOARD_PAGES[board].format(slug=slug),
+        employer=employer,
     )
 
 
@@ -319,11 +330,41 @@ BOARD_MAX_BYTES = 40_000_000
 BOARD_TTL = 6 * HOUR
 
 
+def employer_of(board: Board, data: dict) -> str | None:
+    """The employer a JSON board names, for the boards that name one."""
+    if board == "workable":
+        return data.get("name") or None
+    if board == "smartrecruiters":
+        first = next(iter(data.get("content") or []), {})
+        return (first.get("company") or {}).get("name") or None
+    if board == "recruitee":
+        first = next(iter(data.get("offers") or []), {})
+        return first.get("company_name") or None
+    return None
+
+
+_EMPLOYER_SUFFIXES = {"inc", "ltd", "llc", "gmbh", "ag", "se", "co", "kg", "bv", "sa", "sas",
+                      "ab", "plc", "corp", "corporation", "company", "group", "the", "and"}
+
+
+def same_employer(company: str, employer: str) -> bool:
+    """Whether a board's employer name could be this company ("Personio SE &
+    Co. KG" is Personio; "FD Sandbox" is not)."""
+    def words(name: str) -> set[str]:
+        found = set(re.findall(r"[a-z0-9]+", name.lower()))
+        return (found - _EMPLOYER_SUFFIXES) or found
+
+    a, b = words(company), words(employer)
+    return bool(a & b) or "".join(sorted(a)) == "".join(sorted(b)) or (
+        "".join(re.findall(r"[a-z0-9]+", company.lower()))
+        in "".join(re.findall(r"[a-z0-9]+", employer.lower())))
+
+
 async def fetch_board(
     fetcher: Fetcher, board: Board, slug: str
-) -> tuple[list[Job], int | None] | None:
-    """The board's jobs and its total count if it reports one, or None if
-    this company has no such board."""
+) -> tuple[list[Job], int | None, str | None] | None:
+    """The board's jobs, its total count if it reports one and the employer
+    it names, or None if this company has no such board."""
     if board in _SUBDOMAIN_BOARDS:
         slug = slug.lower()
         if not _HOST_LABEL.match(slug):
@@ -337,12 +378,14 @@ async def fetch_board(
             if response.truncated:
                 raise FetchError(url, 413, f"Response from {url} is too large to read")
             jobs, total = parse_personio(response.text, slug), None
+            employer = _personio_employer(response.text)
         else:
             data = await fetcher.get_json(
                 url, ttl=BOARD_TTL, max_bytes=BOARD_MAX_BYTES, cache=False
             )
             jobs = PARSERS[board](data)
             total = data.get("totalFound") if board == "smartrecruiters" else None
+            employer = employer_of(board, data)
     except FetchError as e:
         if e.status in (404, 400, 410, 422):
             return None
@@ -354,7 +397,7 @@ async def fetch_board(
     except BlockedURLError:
         return None  # a subdomain board whose name doesn't resolve: no such board
     # Lever and SmartRecruiters answer unknown boards with an empty list.
-    return (jobs, total) if jobs else None
+    return (jobs, total, employer) if jobs else None
 
 
 async def _hiring_on(fetcher: Fetcher, board: Board, slug: str, source: str) -> Hiring | None:
@@ -371,7 +414,8 @@ async def _hiring_on(fetcher: Fetcher, board: Board, slug: str, source: str) -> 
 
 
 async def find_hiring(
-    fetcher: Fetcher, linked: list[tuple[Board, str]], guesses: list[str]
+    fetcher: Fetcher, linked: list[tuple[Board, str]], guesses: list[str],
+    company: str | None = None,
 ) -> Hiring | None:
     """Try boards the company's site links to first, then slug guesses.
 
@@ -395,8 +439,11 @@ async def find_hiring(
     for slug in guesses:
         boards = [b for b in BOARD_URLS if (b, slug) not in linked]
         results = await asyncio.gather(*(attempt(b, slug, "guess") for b in boards))
-        if hiring := next((h for h in results if h), None):
-            return hiring
+        # A guessed board that names a different employer is someone else's.
+        results = [h for h in results if h and not (
+            company and h.employer and not same_employer(company, h.employer))]
+        if results:
+            return results[0]
     if errors:
         raise JobBoardsUnavailableError("; ".join(dict.fromkeys(errors)))
     return None

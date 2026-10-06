@@ -1,0 +1,21 @@
+{
+  "name": "scout-plugins",
+  "owner": {
+    "name": "Scout"
+  },
+  "description": "Scout: company research for Claude",
+  "plugins": [
+    {
+      "name": "scout",
+      "source": "./extension",
+      "description": "Research any company: what it does, recent news, real tech stack from GitHub, culture and red flags.",
+      "category": "research",
+      "tags": [
+        "company-research",
+        "job-search",
+        "github",
+        "mcp"
+      ]
+    }
+  ]
+}

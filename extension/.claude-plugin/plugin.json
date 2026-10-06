@@ -1,0 +1,68 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "scout",
+  "displayName": "Scout Company Research",
+  "version": "0.1.0",
+  "description": "Research any company: what it does, recent news, real tech stack from GitHub, culture and red flags.",
+  "author": {
+    "name": "Scout"
+  },
+  "license": "MIT",
+  "keywords": [
+    "company research",
+    "job search",
+    "research",
+    "github",
+    "tech stack",
+    "notes"
+  ],
+  "mcpServers": {
+    "scout": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "python",
+        "-m",
+        "scout_mcp"
+      ],
+      "env": {
+        "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv",
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}",
+        "BRAVE_API_KEY": "${user_config.brave_api_key}",
+        "FIRECRAWL_API_KEY": "${user_config.firecrawl_api_key}",
+        "GITHUB_TOKEN": "${user_config.github_token}"
+      }
+    }
+  },
+  "userConfig": {
+    "brave_api_key": {
+      "type": "string",
+      "title": "Brave Search API key",
+      "description": "Strongly recommended. Free tier at brave.com/search/api. Without a key, search falls back to DuckDuckGo, which sometimes blocks automated searches.",
+      "sensitive": true,
+      "required": false
+    },
+    "firecrawl_api_key": {
+      "type": "string",
+      "title": "Firecrawl API key",
+      "description": "Optional. Used for search when there is no Brave key, and for reading JavaScript-heavy pages.",
+      "sensitive": true,
+      "required": false
+    },
+    "github_token": {
+      "type": "string",
+      "title": "GitHub token",
+      "description": "Optional. Enables company research on GitHub. Use a fine-grained token with public repository read access only.",
+      "sensitive": true,
+      "required": false
+    },
+    "notes_directory": {
+      "type": "directory",
+      "title": "Notes folder",
+      "description": "Where your research notebook (notes.db) is stored. Leave blank for ~/.scout, the same notebook the Claude Desktop extension uses.",
+      "required": false
+    }
+  }
+}

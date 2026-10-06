@@ -1,11 +1,32 @@
-# Scout for Claude Desktop
+# Scout: company research for Claude
 
-A research toolkit for Claude that runs on your own computer. Ask Claude to
-research anything: it searches the web, reads the sources, checks what a
-company really builds on GitHub, and keeps what it finds in a notebook stored
-locally.
+Company research for Claude that runs on your own computer. Ask about any
+company and Scout gathers a dossier: its website, recent news, engineering and
+culture sources, its real tech stack from GitHub, and what you saved before.
+Claude writes a cited brief and keeps it in a notebook stored on your machine.
 
-## Install
+The same folder is both a **Claude Desktop extension** and a **Claude Code
+plugin**. Both share one notebook (`~/.scout` by default).
+
+## Install in Claude Code
+
+```
+/plugin marketplace add <owner>/ai_research-assistant
+/plugin install scout@scout-plugins
+```
+
+Then add your keys with `/plugin configure scout@scout-plugins`. They're all
+optional, but add a Brave Search key (see the table below). Claude Code installs
+Python and the dependencies itself; you only need
+[uv](https://docs.astral.sh/uv/) on your PATH.
+
+Use it:
+
+- `/scout:research-company Linear linear.app`: a full cited brief
+- `/scout:compare-companies Stripe, Adyen`: a side-by-side comparison
+- Or just ask: "what does Vercel build with?" Claude picks the skill up itself.
+
+## Install in Claude Desktop
 
 1. Download `scout.mcpb` (see [Building](#building) to make it yourself).
 2. Double-click it, or in Claude Desktop open **Settings → Extensions** and
@@ -33,7 +54,7 @@ Just ask, for example:
 - "What does Linear's engineering team build with? Save what you find."
 - "What have I saved about vector databases?"
 
-Or start from a prompt in the **+** menu:
+In Claude Desktop, you can also start from a prompt in the **+** menu:
 
 - **Research a topic**: multi-source research with citations, saved as a note.
 - **Research a company**: mission, tech stack (with GitHub evidence), culture,
@@ -77,11 +98,21 @@ To try it with the MCP Inspector without installing it:
 npx @modelcontextprotocol/inspector uv run --directory . python -m scout_mcp
 ```
 
-### Using it outside Claude Desktop
-
-It is a standard MCP server, so any MCP client can run it. For example, in
-Claude Code:
+To check the Claude Code plugin and install it from your local checkout:
 
 ```bash
-claude mcp add scout -e BRAVE_API_KEY=... -- uv run --directory /path/to/extension python -m scout_mcp
+claude plugin validate . --strict                 # the plugin (this folder)
+claude plugin validate .. --strict                # the marketplace (repo root)
+claude plugin marketplace add /path/to/ai_research-assistant
+claude plugin install scout@scout-plugins
 ```
+
+`tests/test_packaging.py` keeps the Desktop manifest, the plugin manifest and
+the marketplace in step: the same version, settings and tool names.
+
+### Other MCP clients
+
+It is a standard stdio MCP server, so any MCP client can run it:
+`uv run --directory /path/to/extension python -m scout_mcp`, with the keys in
+the environment (`BRAVE_API_KEY`, `FIRECRAWL_API_KEY`, `GITHUB_TOKEN`,
+`SCOUT_DATA_DIR`).

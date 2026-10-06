@@ -7,7 +7,7 @@ An AI-powered job search assistant that monitors job boards, researches companie
 - **Job Board Monitoring** - Scrape LinkedIn and Indeed for job opportunities
 - **Company Research** - AI-powered analysis of company mission, tech stack, and culture
 - **GitHub Signals** - Real tech stack and activity from the company's public GitHub org, via the GitHub MCP server
-- **Claude Desktop Extension** - Company research for anyone, running locally inside Claude Desktop ([extension/](extension/README.md))
+- **Claude Desktop Extension & Claude Code Plugin** - Company research for anyone, running locally ([extension/](extension/README.md))
 - **Cover Letter Generation** - Personalized cover letters based on your skills and job requirements
 - **RAG-Based Matching** - Semantic job matching using vector embeddings
 - **Evaluation Harness** - LLM-as-judge quality measurement for all agents
@@ -164,14 +164,22 @@ read-only header, and the client refuses any tool other than `search_repositorie
 `get_file_contents`. A fine-grained token with public-repository read access is enough.
 Without a token, or if the server can't be reached, research runs as before.
 
-## Claude Desktop extension
+## Claude Desktop extension and Claude Code plugin
 
 `extension/` packages Scout's company research as a one-click Claude Desktop
-extension (`.mcpb`) that anyone can install. It runs on the user's computer, uses
+extension (`.mcpb`) and as a Claude Code plugin, so anyone can install it. It runs on the user's computer, uses
 their own Claude, and needs no server, database or OpenAI key. Ask Claude about a
 company and the `research_company` tool assembles a dossier: website, news,
 engineering, culture, GitHub tech stack and previously saved notes. Claude then
 writes a cited brief. Notes are kept in a local SQLite file.
+
+In Claude Code:
+
+```
+/plugin marketplace add <owner>/ai_research-assistant
+/plugin install scout@scout-plugins
+/scout:research-company Linear
+```
 
 It is a standalone package (`scout-mcp`). The backend depends on it for the shared
 GitHub code, and it never depends on the backend. See [extension/README.md](extension/README.md)

@@ -1,6 +1,6 @@
-"""Scout MCP server: company research, plus the web, GitHub and notes tools behind it."""
+"""Scout MCP server: keyless company research, page reading and a local notebook."""
 
-from functools import cache, partial
+from functools import cache
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -9,97 +9,65 @@ from mcp.types import ToolAnnotations
 from scout_mcp import company as company_mod
 from scout_mcp import web
 from scout_mcp.config import Config
-from scout_mcp.github import open_github, research_github
+from scout_mcp.github import research_github
 from scout_mcp.notes import Notebook
+from scout_mcp.sources.github_rest import GitHubRateLimitError, github_rest_caller
+from scout_mcp.sources.http import Cache, Fetcher
 
 INSTRUCTIONS = """\
-Scout researches companies. For any question about a company, start with
-research_company: it returns one dossier (website, news, engineering, culture,
-GitHub tech stack, and the user's saved notes). Then read_page the sources that
-matter for the question, and web_search for anything the dossier lacks. Cite
-the URLs you used. Save findings worth keeping with save_note (source URL and a
-few tags, including the company name). Notes stay on the user's computer."""
-
-KEYLESS_SEARCH_HINT = (
-    "Search is using the free DuckDuckGo fallback, which blocks automated queries at "
-    "times. Adding a Brave Search API key (free tier) in the Scout extension settings "
-    "makes search reliable."
-)
+Scout researches companies from public sources, with no API keys. For any
+question about a company, start with research_company. It returns one dossier:
+Wikidata facts, the website's tech stack and links, email and SaaS tools from
+DNS, hiring from public job boards, the GitHub organisation, Hacker News
+stories, and the user's saved notes. Pass domain= when you know the company's
+website. Scout does not search the web: use your own web search for news,
+funding and employee reviews, and read_page to read a source in full. Cite the
+URLs you used. Save findings worth keeping with save_note (source URL and a few
+tags, including the company name). Notes stay on the user's computer."""
 
 READ_ONLY_WEB = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 READ_ONLY_LOCAL = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 
 
-def create_server(config: Config) -> FastMCP:
+def create_server(config: Config, fetcher: Fetcher | None = None) -> FastMCP:
     mcp = FastMCP("scout", instructions=INSTRUCTIONS)
 
     @cache
     def notebook() -> Notebook:
         return Notebook(config.data_dir / "notes.db")
 
+    @cache
+    def http() -> Fetcher:
+        return fetcher or Fetcher(Cache(config.data_dir / "cache.db"))
+
     # --- Company research -----------------------------------------------------
 
     @mcp.tool(annotations=READ_ONLY_WEB)
     async def research_company(company: str, domain: str | None = None) -> dict:
-        """Research a company in one call and return a dossier to analyse.
+        """Research a company from public sources and return a dossier to analyse.
 
-        Gathers: the company's homepage, search results on what it does, recent
-        news (funding, launches, layoffs), engineering (blog, tech stack) and
-        culture (careers, reviews), its public GitHub organisation, and notes the
-        user saved before. "gaps" lists what could not be found. Search results
-        are snippets: read_page the important ones before drawing conclusions.
+        Sections: facts (Wikidata: website, founded, headcount, HQ, industry),
+        website (tech stack fingerprint, about text, social links), dns (email
+        provider and SaaS tools), hiring (open roles by team and location, remote
+        share, technologies named in job posts), github (languages, frameworks,
+        activity), hacker_news (stories linking to the site), saved_notes, gaps
+        (what could not be found) and next_steps. It does not search the web.
 
         Args:
             company: Company name, e.g. "Linear".
-            domain: The company's website, e.g. "linear.app". Found automatically
-                when omitted, but giving it makes GitHub matching more reliable.
+            domain: The company's website, e.g. "linear.app". Strongly recommended:
+                without it, only an unambiguous Wikidata name match can find the site.
         """
-        github = (
-            partial(open_github, config.github_token, config.github_mcp_url)
-            if config.github_token
-            else None
-        )
         dossier = await company_mod.research_company(
             company,
             domain=domain,
-            search=partial(
-                _search_only,
-                brave_api_key=config.brave_api_key,
-                firecrawl_api_key=config.firecrawl_api_key,
-            ),
-            read=partial(web.read_page, firecrawl_api_key=config.firecrawl_api_key),
-            open_github=github,
+            fetcher=http(),
             notebook=notebook(),
+            github_token=config.github_token,
         )
-        if config.search_provider == "duckduckgo" and any(
-            "search failed" in gap for gap in dossier.gaps
-        ):
-            dossier.gaps.append(KEYLESS_SEARCH_HINT)
         return dossier.to_dict()
 
     # --- Web ------------------------------------------------------------------
-
-    @mcp.tool(annotations=READ_ONLY_WEB)
-    async def web_search(query: str, max_results: int = 8) -> dict:
-        """Search the web. Returns titles, URLs and snippets; use read_page for full text.
-
-        Args:
-            query: What to search for. Search operators like site: work with most providers.
-            max_results: Number of results, 1-20.
-        """
-        try:
-            provider, results = await web.search(
-                query,
-                max_results,
-                brave_api_key=config.brave_api_key,
-                firecrawl_api_key=config.firecrawl_api_key,
-            )
-        except Exception as e:
-            hint = ""
-            if config.search_provider == "duckduckgo":
-                hint = f" {KEYLESS_SEARCH_HINT}"
-            raise ToolError(f"Search failed ({config.search_provider}): {e}.{hint}") from e
-        return {"provider": provider, "results": [r.to_dict() for r in results]}
 
     @mcp.tool(annotations=READ_ONLY_WEB)
     async def read_page(url: str, max_chars: int = 20_000) -> dict:
@@ -110,7 +78,7 @@ def create_server(config: Config) -> FastMCP:
             max_chars: Maximum characters of text to return, 500-100000.
         """
         try:
-            page = await web.read_page(url, max_chars, firecrawl_api_key=config.firecrawl_api_key)
+            page = await web.read_page(url, max_chars)
         except web.BlockedURLError as e:
             raise ToolError(str(e)) from e
         except Exception as e:
@@ -118,27 +86,27 @@ def create_server(config: Config) -> FastMCP:
         return page.to_dict()
 
     @mcp.tool(annotations=READ_ONLY_WEB)
-    async def github_research(company: str, domain: str | None = None) -> dict:
+    async def github_research(
+        company: str, domain: str | None = None, org: str | None = None
+    ) -> dict:
         """What a company builds, from its public GitHub organisation.
 
-        Finds the org and reports top languages, frameworks from dependency
-        manifests, notable repos and last activity, with a match confidence.
-        A "low" confidence org was guessed from the name and may be a different
-        company: check its repos fit before relying on it.
+        Reports top languages, frameworks from dependency manifests, notable
+        repos and last activity, with a match confidence. A "low" confidence org
+        was guessed from the name and may be a different company. Uses GitHub's
+        public API without a token (60 requests an hour; results cached a day).
 
         Args:
             company: Company name, e.g. "Stripe".
-            domain: The company's website domain, e.g. "stripe.com". Improves matching.
+            domain: The company's website, e.g. "stripe.com". Improves matching.
+            org: The exact GitHub organisation login, if known.
         """
-        if not config.github_token:
-            raise ToolError(
-                "GitHub research needs a GitHub token. Add one in the Scout extension "
-                "settings (a fine-grained token with public repository read access)."
+        try:
+            profile = await research_github(
+                company, github_rest_caller(http(), config.github_token), domain=domain, org=org
             )
-        async with open_github(config.github_token, config.github_mcp_url) as call:
-            if call is None:
-                raise ToolError("Could not connect to GitHub. Check the token and connection.")
-            profile = await research_github(company, call, domain=domain)
+        except GitHubRateLimitError as e:
+            raise ToolError(str(e)) from e
         if profile is None:
             return {"found": False, "company": company}
         return {"found": True, **profile.to_dict()}
@@ -216,31 +184,20 @@ def create_server(config: Config) -> FastMCP:
         return f"""Research this topic thoroughly: {topic}
 
 1. search_notes for what I have already saved about it.
-2. web_search from two or three different angles, then read_page the most
-   relevant and credible sources (aim for at least three independent ones).
+2. Use your own web search from two or three different angles, then read_page
+   the most relevant and credible sources (at least three independent ones).
 3. Write a clear summary: key facts, where sources disagree, and what is
    still uncertain. Cite each claim with its URL.
 4. save_note the summary with its main source URLs and a few tags."""
 
     @mcp.prompt(title="Research a company")
     def company_research(company: str, domain: str = "") -> str:
-        """Company brief for a job seeker: what it does, tech stack, culture, red flags."""
+        """Company brief for a job seeker: what it does, tech stack, hiring, culture, red flags."""
         domain_arg = f', domain="{domain}"' if domain else ""
+        call = f'research_company(company="{company}"{domain_arg})'
         return f"""Research the company {company} for me as a job seeker.
 
-1. Call research_company(company="{company}"{domain_arg}).
-2. read_page the most informative sources it found: the homepage or about
-   page, the most recent news, and the engineering blog or careers page.
-3. Write a brief with these sections, citing a URL for every claim:
-   - What they do: products, customers, business model
-   - Size and stage: headcount, funding, growth signals
-   - Tech stack: from the GitHub evidence and engineering posts. Say if the
-     GitHub match confidence is "low"
-   - Culture: how they work, what employees say
-   - Red flags: layoffs, bad reviews, stale GitHub, funding trouble
-   - Questions to ask in an interview
-   Say plainly what you could not find (see "gaps").
-4. save_note the brief, tagged "{company.lower()}" and "company"."""
+{BRIEF_STEPS.format(call=call, tag=company.lower())}"""
 
     @mcp.prompt(title="Compare companies")
     def compare_companies(companies: str) -> str:
@@ -249,23 +206,34 @@ def create_server(config: Config) -> FastMCP:
         listed = ", ".join(names)
         return f"""Compare these companies for me as a job seeker: {listed}.
 
-1. Call research_company for each one.
-2. read_page the key sources for each where the snippets are not enough.
-3. Give a comparison table (what they do, stage and size, tech stack, culture
-   signals, red flags), then a short recommendation of which fits someone who
-   values growth, stability or interesting engineering. Cite sources.
+1. Call research_company for each one (find each website with your web search
+   first if you don't know it, and pass it as domain=).
+2. Use your web search for recent news and employee reviews of each.
+3. Give a comparison table (what they do, stage and size, tech stack, hiring,
+   culture signals, red flags), then a short recommendation of which fits
+   someone who values growth, stability or interesting engineering. Cite
+   sources, and say what you could not find for each company (its "gaps").
 4. save_note the comparison tagged "comparison" plus each company name."""
 
     return mcp
 
 
-async def _search_only(
-    query: str, limit: int, *, brave_api_key: str | None, firecrawl_api_key: str | None
-) -> list[web.SearchResult]:
-    _, results = await web.search(
-        query, limit, brave_api_key=brave_api_key, firecrawl_api_key=firecrawl_api_key
-    )
-    return results
+BRIEF_STEPS = """\
+1. If you don't know the company's official website, find it with your web
+   search first. Then call {call} (adding domain= if you found the site).
+2. Use your own web search for recent news, funding and employee reviews, and
+   read_page the most informative sources. The dossier has no news in it.
+3. Write a brief with these sections, citing a URL for every claim:
+   - What they do: products, customers, business model
+   - Size and stage: headcount, founding year, funding, growth signals
+   - Tech stack: from the website fingerprint, job posts and GitHub. Say if the
+     GitHub match confidence is "low"
+   - Hiring: open roles by team and location, remote share
+   - Culture: how they work, what employees say
+   - Red flags: layoffs, bad reviews, stale GitHub, hiring freeze
+   - Questions to ask in an interview
+   Say plainly what you could not find (see "gaps").
+4. save_note the brief, tagged "{tag}" and "company"."""
 
 
 def main() -> None:

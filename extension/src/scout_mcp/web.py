@@ -1,11 +1,4 @@
-"""Web search and page reading.
-
-Search uses the first configured provider: Brave Search, then Firecrawl, then
-DuckDuckGo's HTML endpoint. DuckDuckGo needs no key but is best-effort: it is
-unofficial, and it answers queries it takes for a bot with a CAPTCHA page.
-
-Page reading uses Firecrawl when configured, since it renders JavaScript, and
-plain HTTP plus HTML-to-text otherwise.
+"""Reading public web pages, and the guard that keeps every fetch public.
 
 Every fetch is restricted to public http(s) addresses. The model decides what
 to fetch, and the pages it reads can try to steer it, so without this a page
@@ -17,7 +10,7 @@ import asyncio
 import ipaddress
 import socket
 from dataclasses import asdict, dataclass
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -28,20 +21,6 @@ MAX_PAGE_BYTES = 5_000_000
 
 class BlockedURLError(ValueError):
     """The URL is not a public http(s) address."""
-
-
-class SearchBlockedError(RuntimeError):
-    """The search provider refused an automated query (e.g. a CAPTCHA page)."""
-
-
-@dataclass
-class SearchResult:
-    title: str
-    url: str
-    snippet: str
-
-    def to_dict(self) -> dict:
-        return asdict(self)
 
 
 @dataclass
@@ -83,115 +62,15 @@ async def _check_request(request: httpx.Request) -> None:
     await ensure_public_url(str(request.url))
 
 
-def public_client(**kwargs) -> httpx.AsyncClient:
+def public_client(timeout: float = 20, **kwargs) -> httpx.AsyncClient:
     """An httpx client that refuses non-public destinations, on every hop."""
     return httpx.AsyncClient(
         headers={"User-Agent": USER_AGENT},
         follow_redirects=True,
-        timeout=httpx.Timeout(20),
+        timeout=httpx.Timeout(timeout),
         event_hooks={"request": [_check_request]},
         **kwargs,
     )
-
-
-# --- Search -------------------------------------------------------------------
-
-
-async def brave_search(query: str, limit: int, api_key: str) -> list[SearchResult]:
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            "https://api.search.brave.com/res/v1/web/search",
-            params={"q": query, "count": min(limit, 20)},
-            headers={"X-Subscription-Token": api_key, "Accept": "application/json"},
-        )
-        r.raise_for_status()
-    results = (r.json().get("web") or {}).get("results") or []
-    return [
-        SearchResult(
-            title=item.get("title", ""),
-            url=item.get("url", ""),
-            snippet=BeautifulSoup(item.get("description", ""), "html.parser").get_text(),
-        )
-        for item in results[:limit]
-    ]
-
-
-async def firecrawl_search(query: str, limit: int, api_key: str) -> list[SearchResult]:
-    async with httpx.AsyncClient(timeout=60) as client:
-        r = await client.post(
-            "https://api.firecrawl.dev/v2/search",
-            json={"query": query, "limit": limit},
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        r.raise_for_status()
-    data = r.json().get("data") or {}
-    # v2 groups results by source; tolerate the v1 flat list too.
-    items = data.get("web", []) if isinstance(data, dict) else data
-    return [
-        SearchResult(
-            title=item.get("title", ""),
-            url=item.get("url", ""),
-            snippet=item.get("description") or item.get("snippet") or "",
-        )
-        for item in items[:limit]
-    ]
-
-
-def parse_duckduckgo_html(html: str, limit: int) -> list[SearchResult]:
-    soup = BeautifulSoup(html, "html.parser")
-    results = []
-    for block in soup.select(".result"):
-        link = block.select_one("a.result__a")
-        if not link or not link.get("href"):
-            continue
-        href = link["href"]
-        # Result links go through a redirector: //duckduckgo.com/l/?uddg=<target>
-        target = parse_qs(urlparse(href).query).get("uddg", [href])[0]
-        if "duckduckgo.com/y.js" in target:  # ads
-            continue
-        snippet = block.select_one(".result__snippet")
-        results.append(
-            SearchResult(
-                title=link.get_text(strip=True),
-                url=target,
-                snippet=snippet.get_text(" ", strip=True) if snippet else "",
-            )
-        )
-        if len(results) >= limit:
-            break
-    return results
-
-
-def is_duckduckgo_challenge(status_code: int, html: str) -> bool:
-    # DuckDuckGo answers suspected bots with HTTP 202 and an image CAPTCHA
-    # ("anomaly") page. It looks like an empty result page, so it must be
-    # detected rather than reported as "no results".
-    return status_code == 202 or "anomaly-modal" in html
-
-
-async def duckduckgo_search(query: str, limit: int) -> list[SearchResult]:
-    async with httpx.AsyncClient(timeout=20, headers={"User-Agent": USER_AGENT}) as client:
-        r = await client.post("https://html.duckduckgo.com/html/", data={"q": query})
-        r.raise_for_status()
-    if is_duckduckgo_challenge(r.status_code, r.text):
-        raise SearchBlockedError("DuckDuckGo asked for a CAPTCHA, so the search was blocked")
-    return parse_duckduckgo_html(r.text, limit)
-
-
-async def search(
-    query: str,
-    limit: int = 8,
-    *,
-    brave_api_key: str | None = None,
-    firecrawl_api_key: str | None = None,
-) -> tuple[str, list[SearchResult]]:
-    """Search the web with the best configured provider. Returns (provider, results)."""
-    limit = max(1, min(limit, 20))
-    if brave_api_key:
-        return "brave", await brave_search(query, limit, brave_api_key)
-    if firecrawl_api_key:
-        return "firecrawl", await firecrawl_search(query, limit, firecrawl_api_key)
-    return "duckduckgo", await duckduckgo_search(query, limit)
 
 
 # --- Reading ------------------------------------------------------------------
@@ -237,34 +116,8 @@ async def _read_direct(url: str, max_chars: int) -> Page:
     return Page(url=final_url, title=title, text=text, truncated=truncated)
 
 
-async def _read_firecrawl(url: str, max_chars: int, api_key: str) -> Page:
-    async with httpx.AsyncClient(timeout=90) as client:
-        r = await client.post(
-            "https://api.firecrawl.dev/v2/scrape",
-            json={"url": url, "formats": ["markdown"], "onlyMainContent": True},
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        r.raise_for_status()
-    data = r.json().get("data") or {}
-    metadata = data.get("metadata") or {}
-    text, truncated = _truncate(data.get("markdown") or "", max_chars)
-    return Page(
-        url=metadata.get("sourceURL") or url,
-        title=metadata.get("title") or "",
-        text=text,
-        truncated=truncated,
-    )
-
-
-async def read_page(
-    url: str, max_chars: int = 20_000, *, firecrawl_api_key: str | None = None
-) -> Page:
+async def read_page(url: str, max_chars: int = 20_000) -> Page:
     """Readable text of a public web page."""
     await ensure_public_url(url)
     max_chars = max(500, min(max_chars, 100_000))
-    if firecrawl_api_key:
-        try:
-            return await _read_firecrawl(url, max_chars, firecrawl_api_key)
-        except httpx.HTTPError:
-            pass  # fall back to a direct fetch
     return await _read_direct(url, max_chars)

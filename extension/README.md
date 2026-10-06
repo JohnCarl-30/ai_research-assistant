@@ -1,12 +1,23 @@
 # Scout: company research for Claude
 
-Company research for Claude that runs on your own computer. Ask about any
-company and Scout gathers a dossier: its website, recent news, engineering and
-culture sources, its real tech stack from GitHub, and what you saved before.
-Claude writes a cited brief and keeps it in a notebook stored on your machine.
+Company research for Claude that runs on your own computer and needs **no API
+keys and no accounts**. Ask about any company and Scout builds a dossier from
+public sources:
 
-The same folder is both a **Claude Desktop extension** and a **Claude Code
-plugin**. Both share one notebook (`~/.scout` by default).
+- **Facts** from Wikidata: website, founding year, headcount, headquarters, industry
+- **Tech stack** the company's website runs on (framework, hosting, analytics, support tools)
+- **Email and SaaS tools** from the domain's public DNS records
+- **Hiring** from its public job board (Greenhouse, Lever or Ashby): open roles by
+  team and location, remote share, and the technologies the job posts mention
+- **Engineering** from its GitHub organisation: languages, frameworks, activity
+- **Hacker News** discussions of its launches and blog posts
+- **Your saved notes** about it
+
+Claude adds recent news with its own web search, writes a cited brief, and saves
+it to a notebook stored only on your machine.
+
+The same folder is both a **Claude Code plugin** and a **Claude Desktop
+extension**. Both share one notebook (`~/.scout` by default).
 
 ## Install in Claude Code
 
@@ -16,12 +27,8 @@ plugin**. Both share one notebook (`~/.scout` by default).
 ```
 
 Replace `<owner>` with the GitHub account or organisation that hosts this
-repository.
-
-Then add your keys with `/plugin configure scout@scout-plugins`. They're all
-optional, but add a Brave Search key (see the table below). Claude Code installs
-Python and the dependencies itself; you only need
-[uv](https://docs.astral.sh/uv/) on your PATH.
+repository. You need [uv](https://docs.astral.sh/uv/) on your PATH; Claude Code
+installs Python and the dependencies itself.
 
 Use it:
 
@@ -31,58 +38,55 @@ Use it:
 
 ## Install in Claude Desktop
 
-1. Download `scout.mcpb` (see [Building](#building) to make it yourself).
-2. Double-click it, or in Claude Desktop open **Settings → Extensions** and
-   drag the file in.
-3. Fill in the settings form. Every field is optional:
+1. Download `scout-<version>.mcpb` from the repository's Releases page.
+2. Double-click it, or drag it into **Settings → Extensions**.
+3. The only setting is where to keep your notes (default `~/.scout`).
 
-| Setting | What it unlocks | Where to get it |
-|---|---|---|
-| Brave Search API key | Reliable web search (strongly recommended) | [brave.com/search/api](https://brave.com/search/api/), free tier available |
-| Firecrawl API key | Search, plus reading JavaScript-heavy pages | [firecrawl.dev](https://firecrawl.dev) |
-| GitHub token | `github_research` | GitHub → Settings → Developer settings → Fine-grained tokens, with public repository read access only |
-| Notes folder | Where the notebook is stored | Defaults to `~/.scout` |
-
-**Add a Brave Search key.** Without any key, search falls back to DuckDuckGo,
-which sometimes answers automated searches with a CAPTCHA instead of results.
-When that happens Scout says so instead of returning nothing, but research will
-be thin until you add a key. Brave's free tier is enough for personal use. Claude Desktop installs Python and the dependencies
-for you, so the first launch takes a few seconds longer.
-
-## Use
-
-Just ask, for example:
-
-- "Research the current state of solid-state batteries."
-- "What does Linear's engineering team build with? Save what you find."
-- "What have I saved about vector databases?"
-
-In Claude Desktop, you can also start from a prompt in the **+** menu:
-
-- **Research a topic**: multi-source research with citations, saved as a note.
-- **Research a company**: mission, tech stack (with GitHub evidence), culture,
-  red flags and interview questions.
+Turn on Claude's web search too: Scout covers structured sources and leaves news
+and reviews to it. In Claude Desktop you can also start from the **+** menu:
+**Research a company**, **Compare companies**, **Research a topic**.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `web_search` | Web search via Brave, Firecrawl or DuckDuckGo, whichever is configured first |
+| `research_company` | The dossier above, in one call. Pass `domain=` when you know the website |
 | `read_page` | A public web page as plain text. Private and local network addresses are refused |
-| `github_research` | A company's GitHub org: languages, frameworks, notable repos, last activity |
-| `save_note` | Save a finding (markdown, source URL, tags) |
-| `search_notes` | Keyword search over saved notes (BM25, with snippets) |
-| `list_notes` / `get_note` | Browse and read saved notes |
+| `github_research` | A company's GitHub org on its own: languages, frameworks, repos, activity |
+| `save_note` / `search_notes` / `list_notes` / `get_note` | Your local research notebook (search ranks by BM25) |
 | `delete_note` | Delete a note (marked destructive, so clients can ask you first) |
+
+## How it stays accurate without keys
+
+- **Exact links beat guesses.** When the company's website links to its GitHub org
+  or job board, or Wikidata records its GitHub account, Scout uses that exact
+  account and marks the match `high` confidence. Only otherwise does it try
+  name-based guesses, and it says so.
+- **No name-only lookalikes.** Searching Wikidata for "Linear" finds a chipmaker
+  and an insurer. Scout only accepts a name match when exactly one company has
+  exactly that name; otherwise it asks for the domain.
+- **Nothing silently missing.** Anything it can't find or reach is listed in
+  `gaps`, so Claude can say what it doesn't know.
+
+## Limits
+
+- **GitHub allows 60 requests an hour without a token**, and one company uses
+  about ten. Results are cached for a day. If you research many companies, set a
+  `GITHUB_TOKEN` environment variable (read-only, public repositories) for
+  5,000 an hour. In Claude Code, set it in the shell you start Claude from.
+- **Small private companies** are often missing from Wikidata and may not use a
+  public job board. The dossier will be thinner, and its `gaps` say where.
+- **DNS and website signals** show what a company has set up, not necessarily
+  what it uses today.
 
 ## Privacy
 
-- Notes are stored only in a SQLite file in your notes folder (`notes.db`).
-- Search queries go to the search provider you configured. Page reads go to
-  the page's own site, or to Firecrawl if you added a key.
-- `github_research` uses GitHub's MCP server in read-only mode, and your
-  token is sent only to GitHub.
-- Your API keys are kept in your operating system's keychain by Claude Desktop.
+Notes and a response cache are stored only in your notes folder (`notes.db`,
+`cache.db`). Scout contacts only these public services, and only to research the
+company you asked about: `wikidata.org`, the company's own website, your normal
+DNS resolver, `hn.algolia.com`, `api.github.com`, and the job board APIs
+(`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). There are no
+accounts, keys or telemetry.
 
 ## Building
 
@@ -90,32 +94,22 @@ You need [uv](https://docs.astral.sh/uv/) and Node.js.
 
 ```bash
 cd extension
-uv run pytest                      # tests, offline
-npx @anthropic-ai/mcpb validate manifest.json
-npx @anthropic-ai/mcpb pack . scout.mcpb
+uv run pytest                                  # offline tests
+npx @anthropic-ai/mcpb validate manifest.json  # Desktop manifest
+npx @anthropic-ai/mcpb pack . scout.mcpb       # Desktop bundle
+claude plugin validate . --strict              # Claude Code plugin (this folder)
+claude plugin validate .. --strict             # the marketplace (repo root)
 ```
 
-To try it with the MCP Inspector without installing it:
+Releases are built by GitHub Actions: push a tag `vX.Y.Z` matching the version in
+`manifest.json` and the workflow tests, validates, packs `scout.mcpb` and
+attaches it to a GitHub Release.
 
-```bash
-npx @modelcontextprotocol/inspector uv run --directory . python -m scout_mcp
-```
-
-To check the Claude Code plugin and install it from your local checkout:
-
-```bash
-claude plugin validate . --strict                 # the plugin (this folder)
-claude plugin validate .. --strict                # the marketplace (repo root)
-claude plugin marketplace add /path/to/ai_research-assistant
-claude plugin install scout@scout-plugins
-```
-
-`tests/test_packaging.py` keeps the Desktop manifest, the plugin manifest and
-the marketplace in step: the same version, settings and tool names.
+`tests/test_packaging.py` keeps the Desktop manifest, the plugin manifest and the
+marketplace in step: the same version, settings and tool names.
 
 ### Other MCP clients
 
 It is a standard stdio MCP server, so any MCP client can run it:
-`uv run --directory /path/to/extension python -m scout_mcp`, with the keys in
-the environment (`BRAVE_API_KEY`, `FIRECRAWL_API_KEY`, `GITHUB_TOKEN`,
-`SCOUT_DATA_DIR`).
+`uv run --directory /path/to/extension python -m scout_mcp`, optionally with
+`SCOUT_DATA_DIR` and `GITHUB_TOKEN` in the environment.

@@ -90,8 +90,9 @@ class GitHubToolError(RuntimeError):
 class GitHubProfile:
     org: str
     org_url: str
-    # high: a repo's homepage is on the company's domain. medium: the org login
-    # came from the domain. low: the login was guessed from the name alone.
+    # high: the org came from a trusted source or a repo's homepage is on the
+    # company's domain. medium: the org login came from the domain. low: the
+    # login was guessed from the name alone.
     confidence: Confidence
     repos_sampled: int
     top_languages: list[tuple[str, int]] = field(default_factory=list)
@@ -226,14 +227,22 @@ async def _repo_frameworks(call: ToolCaller, owner: str, repo: str) -> set[str]:
 
 
 async def research_github(
-    company_name: str, call: ToolCaller, domain: str | None = None
+    company_name: str,
+    call: ToolCaller,
+    domain: str | None = None,
+    org: str | None = None,
 ) -> GitHubProfile | None:
-    """Find the company's GitHub org and summarise it, or None if not found."""
+    """Find the company's GitHub org and summarise it, or None if not found.
+
+    ``org`` is an exact login from a trusted source (Wikidata, or a link on the
+    company's own website). It is tried alone, and a match is "high" confidence.
+    """
     root = _domain_root(domain)
     from_domain = root.split(".")[0] if root else None
+    known = org
 
     org, repos = None, []
-    for slug in candidate_org_slugs(company_name, domain):
+    for slug in [known] if known else candidate_org_slugs(company_name, domain):
         repos = await _search_org(call, slug)
         if repos:
             org = slug
@@ -243,7 +252,7 @@ async def research_github(
 
     owner = (repos[0].get("owner") or {}).get("login") or org
     homepages = {_domain_root(r.get("homepage")) for r in repos} - {None}
-    if root and any(h == root or h.endswith(f".{root}") for h in homepages):
+    if known or (root and any(h == root or h.endswith(f".{root}") for h in homepages)):
         confidence: Confidence = "high"
     elif org == from_domain:
         confidence = "medium"

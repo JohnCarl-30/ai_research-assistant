@@ -1,7 +1,7 @@
 [project]
 name = "scout-mcp"
-version = "0.1.0"
-description = "Scout research toolkit for Claude: web search, page reading, GitHub research and a local notebook"
+version = "0.2.0"
+description = "Keyless company research for Claude: public data sources and a local notebook"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -10,6 +10,7 @@ dependencies = [
     "mcp>=1.30,<2",
     "httpx>=0.27",
     "beautifulsoup4>=4.12",
+    "dnspython>=2.6",
 ]
 
 [project.scripts]

@@ -7,7 +7,7 @@ An AI-powered job search assistant that monitors job boards, researches companie
 - **Job Board Monitoring** - Scrape LinkedIn and Indeed for job opportunities
 - **Company Research** - AI-powered analysis of company mission, tech stack, and culture
 - **GitHub Signals** - Real tech stack and activity from the company's public GitHub org, via the GitHub MCP server
-- **Claude Desktop Extension & Claude Code Plugin** - Company research for anyone, running locally ([extension/](extension/README.md))
+- **Claude Desktop Extension & Claude Code Plugin** - Keyless company research for anyone, running locally ([extension/](extension/README.md))
 - **Cover Letter Generation** - Personalized cover letters based on your skills and job requirements
 - **RAG-Based Matching** - Semantic job matching using vector embeddings
 - **Evaluation Harness** - LLM-as-judge quality measurement for all agents
@@ -167,11 +167,13 @@ Without a token, or if the server can't be reached, research runs as before.
 ## Claude Desktop extension and Claude Code plugin
 
 `extension/` packages Scout's company research as a one-click Claude Desktop
-extension (`.mcpb`) and as a Claude Code plugin, so anyone can install it. It runs on the user's computer, uses
-their own Claude, and needs no server, database or OpenAI key. Ask Claude about a
-company and the `research_company` tool assembles a dossier: website, news,
-engineering, culture, GitHub tech stack and previously saved notes. Claude then
-writes a cited brief. Notes are kept in a local SQLite file.
+extension (`.mcpb`) and as a Claude Code plugin, so anyone can install it. It runs on
+the user's computer, uses their own Claude, and needs no server, database or API keys
+of any kind. Ask Claude about a company and the `research_company` tool builds a
+dossier from keyless public sources: Wikidata facts, the website's tech stack, DNS
+(email and SaaS tools), public job boards (hiring and the technologies job posts
+name), GitHub, Hacker News and previously saved notes. Claude adds news with its own
+web search and writes a cited brief. Notes are kept in a local SQLite file.
 
 In Claude Code:
 

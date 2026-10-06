@@ -3,9 +3,9 @@
   "manifest_version": "0.4",
   "name": "scout",
   "display_name": "Scout Company Research",
-  "version": "0.1.0",
-  "description": "Research any company: what it does, recent news, real tech stack from GitHub, culture and red flags.",
-  "long_description": "Scout turns Claude into a company researcher that runs on your computer. Ask about any company and Scout gathers a dossier in one step: the company's website, recent news (funding, launches, layoffs), engineering and culture sources, its real tech stack from its public GitHub organisation, and anything you saved before. Claude then writes a cited brief, and findings are saved to a notebook stored only on your machine. Add a free Brave Search API key for reliable search (without one, search falls back to DuckDuckGo, which sometimes blocks automated queries) and a GitHub token for tech-stack research.",
+  "version": "0.2.0",
+  "description": "Research any company with no API keys: facts, tech stack, hiring, GitHub activity and red flags.",
+  "long_description": "Scout turns Claude into a company researcher that runs on your computer and needs no API keys or accounts. Ask about any company and Scout builds a dossier from public sources: facts from Wikidata (founding year, headcount, headquarters), the tech stack its website runs on, the email and SaaS tools in its DNS records, open roles from its public job board (by team, location and the technologies they mention), its GitHub organisation, and Hacker News discussions of its launches. Claude adds recent news with its own web search and writes a cited brief, saved to a notebook stored only on your machine.",
   "author": {
     "name": "Scout"
   },
@@ -23,21 +23,14 @@
         "scout_mcp"
       ],
       "env": {
-        "SCOUT_DATA_DIR": "${user_config.notes_directory}",
-        "BRAVE_API_KEY": "${user_config.brave_api_key}",
-        "FIRECRAWL_API_KEY": "${user_config.firecrawl_api_key}",
-        "GITHUB_TOKEN": "${user_config.github_token}"
+        "SCOUT_DATA_DIR": "${user_config.notes_directory}"
       }
     }
   },
   "tools": [
     {
       "name": "research_company",
-      "description": "One-call company dossier: website, news, engineering, culture, GitHub and saved notes"
-    },
-    {
-      "name": "web_search",
-      "description": "Search the web (Brave, Firecrawl or DuckDuckGo)"
+      "description": "Keyless company dossier: Wikidata facts, website tech stack, DNS, job boards, GitHub, Hacker News, saved notes"
     },
     {
       "name": "read_page",
@@ -71,31 +64,10 @@
   "tools_generated": false,
   "prompts_generated": true,
   "user_config": {
-    "brave_api_key": {
-      "type": "string",
-      "title": "Brave Search API key",
-      "description": "Strongly recommended. Free tier at brave.com/search/api. Without a key, search falls back to DuckDuckGo, which sometimes blocks automated searches.",
-      "sensitive": true,
-      "required": false
-    },
-    "firecrawl_api_key": {
-      "type": "string",
-      "title": "Firecrawl API key",
-      "description": "Optional. Used for search when there is no Brave key, and for reading JavaScript-heavy pages.",
-      "sensitive": true,
-      "required": false
-    },
-    "github_token": {
-      "type": "string",
-      "title": "GitHub token",
-      "description": "Optional. Enables company research on GitHub. Use a fine-grained token with public repository read access only.",
-      "sensitive": true,
-      "required": false
-    },
     "notes_directory": {
       "type": "directory",
       "title": "Notes folder",
-      "description": "Where your research notebook (notes.db) is stored.",
+      "description": "Where your research notebook and cache are stored. Defaults to ~/.scout, shared with the Claude Code plugin.",
       "default": "${HOME}/.scout",
       "required": false
     }
@@ -103,10 +75,10 @@
   "keywords": [
     "company research",
     "job search",
-    "research",
+    "no api key",
     "github",
     "tech stack",
-    "notes"
+    "hiring"
   ],
   "license": "MIT",
   "compatibility": {

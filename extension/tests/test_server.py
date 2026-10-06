@@ -3,18 +3,18 @@
 import json
 from pathlib import Path
 
+from fakes import FakeFetcher, fixture
 from mcp.shared.memory import create_connected_server_and_client_session
 
 from scout_mcp.config import Config
 from scout_mcp.server import create_server
+from scout_mcp.sources import dnsinfo
 
 MANIFEST = json.loads((Path(__file__).parents[1] / "manifest.json").read_text())
 
 
-def _config(tmp_path, **overrides):
-    values = dict(data_dir=tmp_path, brave_api_key=None, firecrawl_api_key=None,
-                  github_token=None, github_mcp_url="https://example.invalid/mcp/")
-    return Config(**(values | overrides))
+def _config(tmp_path):
+    return Config(data_dir=tmp_path)
 
 
 async def test_manifest_lists_exactly_the_servers_tools(tmp_path):
@@ -41,12 +41,31 @@ async def test_notes_round_trip_through_mcp(tmp_path):
     assert (tmp_path / "notes.db").exists()
 
 
-async def test_tools_explain_missing_configuration_and_blocked_urls(tmp_path):
+async def test_blocked_urls_are_explained(tmp_path):
     async with create_connected_server_and_client_session(create_server(_config(tmp_path))) as c:
-        gh = await c.call_tool("github_research", {"company": "Acme"})
         local = await c.call_tool("read_page", {"url": "http://127.0.0.1:8080/"})
-    assert gh.isError and "GitHub token" in gh.content[0].text
     assert local.isError and "not a public address" in local.content[0].text
+
+
+async def test_research_company_through_mcp_with_no_keys(tmp_path, monkeypatch):
+    async def no_dns(domain):
+        return dnsinfo.DnsInfo(email_provider=["Google Workspace"])
+
+    monkeypatch.setattr(dnsinfo, "lookup", no_dns)
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": [{"title": "Q7624104"}]}}),
+        "sparql": fixture("wikidata_sparql.json"),
+        "api.github.com": (403, "API rate limit exceeded"),
+    })
+    server = create_server(_config(tmp_path), fetcher=fetcher)
+    async with create_connected_server_and_client_session(server) as c:
+        result = await c.call_tool("research_company", {"company": "Stripe",
+                                                         "domain": "stripe.com"})
+    dossier = json.loads(result.content[0].text)
+    assert not result.isError
+    assert dossier["facts"]["employees"] == 8000
+    assert dossier["dns"]["email_provider"] == ["Google Workspace"]
+    assert any("60 an hour" in gap for gap in dossier["gaps"])
 
 
 async def test_company_prompt_drives_the_dossier_tool(tmp_path):
@@ -55,13 +74,12 @@ async def test_company_prompt_drives_the_dossier_tool(tmp_path):
                                                          "domain": "linear.app"})
     text = prompt.messages[0].content.text
     assert 'research_company(company="Linear", domain="linear.app")' in text
+    assert "web search" in text  # Scout itself does not search
 
 
 def test_blank_install_form_fields_mean_unset(monkeypatch, tmp_path):
-    monkeypatch.setenv("BRAVE_API_KEY", "")
-    monkeypatch.setenv("GITHUB_TOKEN", "${user_config.github_token}")
-    monkeypatch.setenv("SCOUT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SCOUT_DATA_DIR", "${user_config.notes_directory}")
+    monkeypatch.setenv("GITHUB_TOKEN", "")
     config = Config.from_env()
-    assert config.brave_api_key is None and config.github_token is None
-    assert config.search_provider == "duckduckgo"
-    assert config.data_dir == tmp_path
+    assert config.github_token is None
+    assert config.data_dir == Path.home() / ".scout"

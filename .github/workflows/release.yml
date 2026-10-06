@@ -35,7 +35,7 @@ jobs:
     name: Build and publish scout.mcpb
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read the extension version
         id: version
@@ -65,13 +65,13 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
 
@@ -99,7 +99,7 @@ jobs:
         run: npx --yes "$MCPB" pack . "../scout-${{ steps.version.outputs.version }}.mcpb"
 
       - name: Keep the bundle as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: scout-${{ steps.version.outputs.version }}.mcpb
           path: scout-${{ steps.version.outputs.version }}.mcpb

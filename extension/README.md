@@ -105,9 +105,16 @@ claude plugin validate . --strict              # Claude Code plugin (this folder
 claude plugin validate .. --strict             # the marketplace (repo root)
 ```
 
-Releases are built by GitHub Actions: push a tag `vX.Y.Z` matching the version in
-`manifest.json` and the workflow tests, validates, packs `scout.mcpb` and
-attaches it to a GitHub Release.
+To release, set the new version everywhere it's recorded and note the changes:
+
+```bash
+uv run python scripts/bump_extension_version.py 0.3.0   # from the repo root
+# then add a 0.3.0 section to extension/CHANGELOG.md
+```
+
+After that's merged, push a tag `vX.Y.Z`, or run **Release extension** on `main`
+with **publish** ticked. The workflow tests, validates, packs `scout-X.Y.Z.mcpb`
+and attaches it to a GitHub Release.
 
 `tests/test_packaging.py` keeps the Desktop manifest, the plugin manifest and the
 marketplace in step: the same version, settings and tool names.

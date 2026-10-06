@@ -65,6 +65,10 @@ _TECH = [
 ]
 
 
+class JobBoardsUnavailableError(RuntimeError):
+    """No board was found, and at least one job board service couldn't be reached."""
+
+
 @dataclass
 class Job:
     title: str
@@ -209,11 +213,23 @@ async def fetch_board(fetcher: Fetcher, board: Board, slug: str) -> list[Job] | 
 async def find_hiring(
     fetcher: Fetcher, linked: list[tuple[Board, str]], guesses: list[str]
 ) -> Hiring | None:
-    """Try boards the company's site links to first, then slug guesses."""
+    """Try boards the company's site links to first, then slug guesses.
+
+    One board being down must not hide another, so each attempt fails on its
+    own. Only when nothing was found and some attempts failed is that an
+    error (the board may exist on a service that was unreachable).
+    """
     attempts = [(b, s, "website") for b, s in linked]
     attempts += [(b, s, "guess") for s in guesses for b in BOARD_URLS if (b, s) not in linked]
+    errors: list[str] = []
     for board, slug, source in attempts:
-        jobs = await fetch_board(fetcher, board, slug)
+        try:
+            jobs = await fetch_board(fetcher, board, slug)
+        except Exception as e:
+            errors.append(f"{board}: {e}")
+            continue
         if jobs:
             return summarize(board, slug, source, jobs)
+    if errors:
+        raise JobBoardsUnavailableError("; ".join(dict.fromkeys(errors)))
     return None

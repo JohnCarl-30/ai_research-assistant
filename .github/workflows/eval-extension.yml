@@ -1,0 +1,53 @@
+name: Extension accuracy eval
+
+# Runs Scout against companies with known answers (extension/evals/companies.json)
+# using the live public sources, without any API keys, like a user's machine.
+# The report shows on the run's summary page and is kept as an artifact, with
+# every response saved for offline replays (run_eval.py --replay).
+#
+# It fails only if Scout crashes: real companies change job boards and
+# websites, so a wrong answer is something to look at, not a build break.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "extension/src/**"
+      - "extension/evals/**"
+      - ".github/workflows/eval-extension.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Accuracy eval (live, keyless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run the eval
+        run: |
+          uv run python extension/evals/run_eval.py \
+            --record eval-tape \
+            --out eval-report.json
+
+      - name: Keep the report and the recorded responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-eval
+          path: |
+            eval-report.json
+            eval-tape/
+          if-no-files-found: ignore

@@ -70,10 +70,12 @@ and reviews to it. In Claude Desktop you can also start from the **+** menu:
 
 ## Limits
 
-- **GitHub allows 60 requests an hour without a token**, and one company uses
-  about ten. Results are cached for a day. If you research many companies, set a
-  `GITHUB_TOKEN` environment variable (read-only, public repositories) for
-  5,000 an hour. In Claude Code, set it in the shell you start Claude from.
+- **GitHub without a token:** Scout uses only GitHub's search API (10 searches a
+  minute) and reads files from `raw.githubusercontent.com`, which doesn't count
+  against GitHub's API quota. A company takes 1 to 4 searches, so you can research
+  several companies a minute, and results are cached for a day. A `GITHUB_TOKEN`
+  environment variable (read-only, public repositories) raises the search limit
+  to 30 a minute. In Claude Code, set it in the shell you start Claude from.
 - **Small private companies** are often missing from Wikidata and may not use a
   public job board. The dossier will be thinner, and its `gaps` say where.
 - **DNS and website signals** show what a company has set up, not necessarily
@@ -84,7 +86,8 @@ and reviews to it. In Claude Desktop you can also start from the **+** menu:
 Notes and a response cache are stored only in your notes folder (`notes.db`,
 `cache.db`). Scout contacts only these public services, and only to research the
 company you asked about: `wikidata.org`, the company's own website, your normal
-DNS resolver, `hn.algolia.com`, `api.github.com`, and the job board APIs
+DNS resolver, `hn.algolia.com`, `api.github.com` and `raw.githubusercontent.com`,
+and the job board APIs
 (`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). There are no
 accounts, keys or telemetry.
 
@@ -113,3 +116,22 @@ marketplace in step: the same version, settings and tool names.
 It is a standard stdio MCP server, so any MCP client can run it:
 `uv run --directory /path/to/extension python -m scout_mcp`, optionally with
 `SCOUT_DATA_DIR` and `GITHUB_TOKEN` in the environment.
+
+### Accuracy eval
+
+`evals/companies.json` lists real companies with known answers (website,
+Wikidata entry, GitHub org, job board, technologies), each marked as verified
+or believed. `evals/run_eval.py` runs Scout against them and reports accuracy
+per field, with a confidently wrong GitHub match counted as **critical**:
+
+```bash
+uv run python extension/evals/run_eval.py                  # live, keyless
+uv run python extension/evals/run_eval.py --record tape/   # live, saving responses
+uv run python extension/evals/run_eval.py --replay tape/   # offline replay
+```
+
+The `Extension accuracy eval` workflow runs it on GitHub Actions for pull
+requests that touch the extension's code or the eval, and on demand. The report
+appears on the run's summary page. Real companies change websites and job
+boards, so a mismatch is either a bug or a stale answer: check which before
+changing the code or the answer.

@@ -65,7 +65,7 @@ async def test_research_company_through_mcp_with_no_keys(tmp_path, monkeypatch):
     assert not result.isError
     assert dossier["facts"]["employees"] == 8000
     assert dossier["dns"]["email_provider"] == ["Google Workspace"]
-    assert any("60 an hour" in gap for gap in dossier["gaps"])
+    assert any("without a token is used up" in gap for gap in dossier["gaps"])
 
 
 async def test_company_prompt_drives_the_dossier_tool(tmp_path):

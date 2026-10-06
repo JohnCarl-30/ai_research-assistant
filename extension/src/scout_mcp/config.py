@@ -1,8 +1,8 @@
 """Extension settings, read from the environment.
 
 Scout needs no API keys. The install form only asks where to keep the
-notebook. An optional GITHUB_TOKEN environment variable raises GitHub's limit
-from 60 to 5,000 requests an hour, for people who research many companies.
+notebook. An optional GITHUB_TOKEN environment variable raises GitHub's search
+limit from 10 to 30 a minute, for people who research many companies at once.
 
 A blank optional field can arrive as an empty string or, in some hosts, as the
 unsubstituted ``${user_config.x}`` placeholder; both mean unset.

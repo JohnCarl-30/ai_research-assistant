@@ -63,7 +63,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 # tests/eval makes real OpenAI calls and is opt-in via RUN_EVAL=1.
-testpaths = ["tests", "extension/tests"]
+testpaths = ["tests", "extension/tests", "extension/evals"]
 markers = [
     "eval: LLM-judged quality evaluation; requires RUN_EVAL=1 and an OpenAI key",
 ]

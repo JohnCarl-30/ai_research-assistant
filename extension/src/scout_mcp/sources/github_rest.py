@@ -1,52 +1,79 @@
-"""GitHub research without a token, over GitHub's public REST API.
+"""GitHub research without a token: the search API plus raw file downloads.
 
 ``research_github`` talks to a ToolCaller that speaks the GitHub MCP server's
-two read-only tools. This adapter answers the same two calls from the REST
-API, which returns the same JSON, so the research logic is shared.
+two read-only tools. This adapter answers the same two calls without spending
+GitHub's tiny keyless API quota (60 requests an hour):
 
-Without a token GitHub allows 60 requests an hour (search: 10 a minute) per
-IP. One company costs about ten, so responses are cached for a day and a
-rate-limit answer is raised as its own error instead of reading as "no org".
-An optional GITHUB_TOKEN raises the limit to 5,000 an hour.
+- ``search_repositories`` uses the search API, which has its own separate
+  allowance (10 requests a minute without a token).
+- ``get_file_contents`` reads from raw.githubusercontent.com, which is not
+  counted against the API quota. A root listing is answered by checking which
+  of the dependency manifests research reads exist there, so the core API is
+  not used at all.
+
+Responses are cached for a day, and a rate-limit answer is raised as its own
+error instead of reading as "no org". An optional GITHUB_TOKEN raises the
+search allowance to 30 a minute.
 """
 
+import asyncio
 import json
 from urllib.parse import quote, urlencode
 
-from scout_mcp.github import ALLOWED_TOOLS, GitHubToolError, ToolCaller
+from scout_mcp.github import ALLOWED_TOOLS, MANIFESTS, GitHubToolError, ToolCaller
 from scout_mcp.sources.http import DAY, Fetcher, FetchError
 
 API = "https://api.github.com"
+RAW = "https://raw.githubusercontent.com"
 
 
 class GitHubRateLimitError(RuntimeError):
-    """GitHub's unauthenticated rate limit is used up for now."""
+    """GitHub's rate limit for requests without a token is used up for now."""
 
 
 class GitHubUnavailableError(RuntimeError):
     """GitHub failed (server error, network), as opposed to "no such org"."""
 
 
-def _headers(token: str | None, accept: str = "application/vnd.github+json") -> dict:
-    headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
+def _headers(token: str | None) -> dict:
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
+def _rate_limit_message(url: str) -> str:
+    if "/search/" in url:
+        return ("GitHub's search limit for requests without a token is used up "
+                "(10 a minute); try again in a minute.")
+    return ("GitHub's limit for requests without a token is used up "
+            "(60 an hour); try again later.")
+
+
 def github_rest_caller(fetcher: Fetcher, token: str | None = None) -> ToolCaller:
-    async def get(url: str, accept: str = "application/vnd.github+json") -> str:
+    # Default branches seen in search results, so raw URLs name the right one.
+    branches: dict[str, str] = {}
+
+    async def api(url: str) -> str:
         try:
-            return (await fetcher.get(url, ttl=DAY, headers=_headers(token, accept))).text
+            return (await fetcher.get(url, ttl=DAY, headers=_headers(token))).text
         except FetchError as e:
             if e.status in (403, 429) and "rate limit" in str(e).lower():
-                raise GitHubRateLimitError(
-                    "GitHub's limit for requests without a token is used up "
-                    "(60 an hour); try again later."
-                ) from e
+                raise GitHubRateLimitError(_rate_limit_message(url)) from e
             if e.status in (404, 422):
                 # Not found, or a search on an org that doesn't exist: "not this one".
                 raise GitHubToolError(str(e)) from e
+            raise GitHubUnavailableError(str(e)) from e
+
+    async def raw(owner: str, repo: str, path: str) -> str | None:
+        """A file's text, or None if the repository has no such file."""
+        branch = branches.get(f"{owner}/{repo}".lower(), "HEAD")
+        url = f"{RAW}/{quote(owner)}/{quote(repo)}/{quote(branch)}/{quote(path)}"
+        try:
+            return (await fetcher.get(url, ttl=DAY)).text
+        except FetchError as e:
+            if e.status == 404:
+                return None
             raise GitHubUnavailableError(str(e)) from e
 
     async def call(tool: str, args: dict) -> str:
@@ -60,17 +87,24 @@ def github_rest_caller(fetcher: Fetcher, token: str | None = None) -> ToolCaller
                 "order": args.get("order", "desc"),
                 "per_page": args.get("perPage", 10),
             }
-            return await get(f"{API}/search/repositories?{urlencode(params)}")
+            text = await api(f"{API}/search/repositories?{urlencode(params)}")
+            for item in json.loads(text).get("items", []):
+                if item.get("full_name") and item.get("default_branch"):
+                    branches[item["full_name"].lower()] = item["default_branch"]
+            return text
 
-        owner, repo = quote(args["owner"]), quote(args["repo"])
+        owner, repo = args["owner"], args["repo"]
         path = args.get("path", "/").strip("/")
         if not path:
-            listing = json.loads(await get(f"{API}/repos/{owner}/{repo}/contents/"))
-            fields = args.get("fields") or ["name", "type"]
-            return json.dumps([{k: e.get(k) for k in fields} for e in listing])
-        return await get(
-            f"{API}/repos/{owner}/{repo}/contents/{quote(path)}",
-            accept="application/vnd.github.raw+json",
-        )
+            # Which of the manifests research reads exist, without the core API.
+            names = list(MANIFESTS)
+            found = await asyncio.gather(*(raw(owner, repo, name) for name in names))
+            return json.dumps(
+                [{"name": n, "type": "file"} for n, text in zip(names, found) if text is not None]
+            )
+        text = await raw(owner, repo, path)
+        if text is None:
+            raise GitHubToolError(f"{owner}/{repo} has no {path}")
+        return text
 
     return call

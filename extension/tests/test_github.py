@@ -127,3 +127,10 @@ async def test_research_github_falls_through_slugs_and_rates_name_guesses_low():
 
 async def test_research_github_returns_none_when_no_org_matches():
     assert await research_github("Nobody Ltd", FakeGitHub(orgs={}, files={})) is None
+
+
+def test_site_name_ignores_subdomains_and_country_endings():
+    from scout_mcp.sources.github_rest import site_name
+    assert site_name("https://careers.doctolib.com/x") == site_name("doctolib.fr") == "doctolib"
+    assert site_name("shop.acme.co.uk") == "acme"
+    assert site_name("") is None

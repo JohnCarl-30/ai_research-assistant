@@ -11,13 +11,16 @@ GitHub's tiny keyless API quota (60 requests an hour):
   of the dependency manifests research reads exist there, so the core API is
   not used at all.
 
-Responses are cached for a day, and a rate-limit answer is raised as its own
-error instead of reading as "no org". An optional token raises the
+Responses are cached for a day. When the search limit (10 a minute) is used
+up and frees up within a minute, the request waits for it and is tried once
+more; otherwise a rate-limit answer is raised as its own error instead of
+reading as "no org". An optional token raises the
 search allowance to 30 a minute.
 """
 
 import asyncio
 import json
+import time
 from urllib.parse import quote, urlencode
 
 from scout_mcp.github import ALLOWED_TOOLS, MANIFESTS, GitHubToolError, ToolCaller, _domain_root
@@ -25,6 +28,16 @@ from scout_mcp.sources.http import DAY, Fetcher, FetchError
 
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
+
+
+# The longest Scout waits for GitHub's rate limit to reset before giving up
+# and reporting it. The search limit resets every minute; the hourly core
+# limit is never worth waiting for.
+MAX_RATE_LIMIT_WAIT = 60
+
+# Indirections so tests don't really wait.
+_sleep = asyncio.sleep
+_now = time.time
 
 
 class GitHubRateLimitError(RuntimeError):
@@ -50,12 +63,30 @@ def _rate_limit_message(url: str) -> str:
             "(60 an hour); try again later.")
 
 
-async def _api(fetcher: Fetcher, url: str, token: str | None) -> str:
+def _rate_limit_wait(e: FetchError) -> float | None:
+    """Seconds until GitHub's limit frees up, if it says and it's soon."""
+    try:
+        if "retry-after" in e.headers:
+            wait = float(e.headers["retry-after"])
+        elif "x-ratelimit-reset" in e.headers:
+            wait = float(e.headers["x-ratelimit-reset"]) - _now()
+        else:
+            return None
+    except ValueError:
+        return None
+    return max(wait, 0.0) if wait <= MAX_RATE_LIMIT_WAIT else None
+
+
+async def _api(fetcher: Fetcher, url: str, token: str | None, retry: bool = True) -> str:
     try:
         return (await fetcher.get(url, ttl=DAY, headers=_headers(token))).text
     except FetchError as e:
         if e.status in (403, 429) and "rate limit" in str(e).lower():
-            raise GitHubRateLimitError(_rate_limit_message(url)) from e
+            wait = _rate_limit_wait(e) if retry else None
+            if wait is None:
+                raise GitHubRateLimitError(_rate_limit_message(url)) from e
+            await _sleep(wait + 1)
+            return await _api(fetcher, url, token, retry=False)
         if e.status in (404, 422):
             # Not found, or a search on an org that doesn't exist: "not this one".
             raise GitHubToolError(str(e)) from e
@@ -86,6 +117,27 @@ async def find_org_by_website(
         if site and (site == domain or site.endswith(f".{domain}")):
             return login
     return None
+
+
+def site_name(site: str | None) -> str | None:
+    """The name a website is registered under: "careers.doctolib.com" and
+    "www.doctolib.fr" are both "doctolib"; "shop.acme.co.uk" is "acme"."""
+    host = _domain_root(site or "")
+    if not host:
+        return None
+    labels = host.split(".")
+    if len(labels) >= 3 and len(labels[-1]) == 2 and len(labels[-2]) <= 3:
+        return labels[-3]  # acme.co.uk, acme.com.au
+    return labels[-2] if len(labels) >= 2 else None
+
+
+async def org_website(
+    fetcher: Fetcher, login: str, token: str | None = None
+) -> str | None:
+    """The website on a GitHub org's profile ("" if it lists none). One core
+    API call."""
+    profile = json.loads(await _api(fetcher, f"{API}/orgs/{quote(login)}", token))
+    return profile.get("blog") or ""
 
 
 def github_rest_caller(fetcher: Fetcher, token: str | None = None) -> ToolCaller:

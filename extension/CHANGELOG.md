@@ -3,6 +3,30 @@
 All notable changes to Scout, the company research extension for Claude
 Desktop and plugin for Claude Code.
 
+## 0.3.1 (2026-10-07)
+
+### Fixed
+- A company's main GitHub org is no longer replaced by a side org when its
+  profile lists the company's site under another domain ending
+  (careers.doctolib.com for doctolib.fr): Doctolib's org is doctolib, not
+  doctolib-lab.
+- A guessed GitHub org that is really a person's account, or whose profile
+  names another company's site, is replaced by the org that lists the
+  company's site, or marked low confidence if there is none.
+- A GitHub link on a company's site to another company's org (airbnb.com
+  links New Relic's) is no longer taken as the company's own org: a link not
+  named like the company is only trusted if that org's profile lists the
+  company's site.
+
+### Changed
+- When GitHub's search limit (10 a minute without a token) runs out and
+  resets within a minute, Scout waits for it and tries once more instead of
+  leaving GitHub out of the dossier. The hourly limit is still reported, not
+  waited for.
+- Checking a guessed GitHub org reads its profile first (one request) and
+  only searches when the profile contradicts the guess, so research uses
+  fewer of GitHub's 60 requests an hour.
+
 ## 0.3.0 (2026-10-06)
 
 ### Added

@@ -7,7 +7,7 @@ import pytest
 from fakes import FakeFetcher, fixture
 
 from scout_mcp.github import GitHubToolError, research_github
-from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
+from scout_mcp.sources import dnsinfo, github_rest, hn, jobs, site, wikidata
 from scout_mcp.sources.github_rest import (
     GitHubRateLimitError,
     find_org_by_website,
@@ -518,3 +518,55 @@ async def test_a_guessed_board_of_another_employer_is_skipped():
     })
     h = await jobs.find_hiring(fetcher, [], guesses=["personio"], company="Personio")
     assert (h.board, h.employer) == ("personio", "Personio SE & Co. KG")
+
+
+class _RateLimited(FakeFetcher):
+    """GitHub answering with a used-up limit first, then (maybe) the real answer."""
+
+    def __init__(self, answers):
+        super().__init__({})
+        self.answers = list(answers)
+
+    async def get(self, url, *, ttl, headers=None, max_bytes=0, cache=True):
+        self.requests.append((url, headers or {}))
+        answer = self.answers.pop(0)
+        if isinstance(answer, dict):
+            raise FetchError(url, 403, f"HTTP 403 from {url}: API rate limit exceeded",
+                             headers=answer)
+        return Response(url=url, status=200, headers={}, text=answer)
+
+
+async def test_a_search_limit_that_resets_soon_is_waited_out(monkeypatch):
+    waits = []
+
+    async def no_sleep(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(github_rest, "_sleep", no_sleep)
+    monkeypatch.setattr(github_rest, "_now", lambda: 1000.0)
+    fetcher = _RateLimited([{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1020"},
+                            '{"items": []}'])
+    assert await github_rest._api(fetcher, "https://api.github.com/search/users?q=x", None)
+    assert waits == [21.0] and len(fetcher.requests) == 2
+
+
+async def test_a_limit_that_resets_later_is_reported_without_waiting(monkeypatch):
+    async def must_not_sleep(seconds):
+        raise AssertionError("waited for an hourly limit")
+
+    monkeypatch.setattr(github_rest, "_sleep", must_not_sleep)
+    monkeypatch.setattr(github_rest, "_now", lambda: 1000.0)
+    fetcher = _RateLimited([{"x-ratelimit-reset": "3000"}])
+    with pytest.raises(GitHubRateLimitError, match="60 an hour"):
+        await github_rest._api(fetcher, "https://api.github.com/orgs/acme", None)
+
+
+async def test_the_limit_is_waited_out_only_once(monkeypatch):
+    async def no_sleep(seconds):
+        pass
+
+    monkeypatch.setattr(github_rest, "_sleep", no_sleep)
+    fetcher = _RateLimited([{"retry-after": "5"}, {"retry-after": "5"}])
+    with pytest.raises(GitHubRateLimitError, match="10 a minute"):
+        await github_rest._api(fetcher, "https://api.github.com/search/users?q=x", None)
+    assert len(fetcher.requests) == 2

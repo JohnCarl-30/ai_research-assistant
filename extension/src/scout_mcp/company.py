@@ -18,13 +18,20 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from scout_mcp.github import _domain_root, candidate_org_slugs, research_github
+from scout_mcp.github import (
+    GitHubToolError,
+    _domain_root,
+    candidate_org_slugs,
+    research_github,
+)
 from scout_mcp.notes import Notebook
 from scout_mcp.sources import dnsinfo, hn, jobs, site, wikidata
 from scout_mcp.sources.github_rest import (
     GitHubRateLimitError,
     find_org_by_website,
     github_rest_caller,
+    org_website,
+    site_name,
 )
 from scout_mcp.sources.http import Fetcher
 
@@ -56,12 +63,29 @@ class Dossier:
         return dict(self.__dict__)
 
 
-def _pick_org(orgs: list[str], company: str, domain: str | None) -> str | None:
-    """The site's GitHub link most like the company, if it links to any."""
-    if not orgs:
-        return None
+async def _pick_org(
+    orgs: list[str], company: str, domain: str | None, fetcher: Fetcher, token: str | None
+) -> str | None:
+    """The site's GitHub link that is the company's own org, if it links to one.
+
+    A link named like the company is trusted. Any other link (a site can link
+    a vendor's or a library's org: airbnb.com links newrelic) is only taken if
+    that org's profile lists a site on the company's name (getsentry for
+    sentry.io). Up to two such links are checked, one request each.
+    """
     slugs = set(candidate_org_slugs(company, domain))
-    return next((o for o in orgs if o.lower() in slugs), orgs[0])
+    if named := next((o for o in orgs if o.lower() in slugs), None):
+        return named
+    if not domain:
+        return orgs[0] if orgs else None
+    for org in orgs[:2]:
+        try:
+            site = await org_website(fetcher, org, token)
+        except Exception:
+            continue  # not an org, or GitHub can't be asked now: not trusted
+        if site and site_name(site) == site_name(domain):
+            return org
+    return None
 
 
 async def research_company(
@@ -176,22 +200,54 @@ async def research_company(
         else:
             d.hiring = hiring.to_dict()
 
+    async def _check_guessed_org(profile, source):
+        """A guessed org may be a namesake (Pleo's is pleo-io, not pleo).
+        Its own profile settles it in one call: a website on the company's
+        name (careers.doctolib.com for doctolib.fr) confirms it; another
+        company's website means searching for the org that lists the site."""
+        if profile is None:
+            listed = await find_org_by_website(fetcher, d.company, d.domain, github_token)
+            if not listed:
+                return None, source
+            call = github_rest_caller(fetcher, github_token)
+            return (await research_github(d.company, call, domain=d.domain, org=listed),
+                    "github profile")
+        try:
+            try:
+                site = await org_website(fetcher, profile.org, github_token)
+            except GitHubToolError:
+                site = None  # not an organisation: a person's account of that name
+            if site and site_name(site) == site_name(d.domain):
+                profile.confidence = "high"
+                return profile, "github profile"
+            if site == "" and profile.confidence == "medium":
+                return profile, source  # login from the domain, nothing against it
+            listed = await find_org_by_website(fetcher, d.company, d.domain, github_token)
+        except Exception:
+            return profile, source  # can't check now: keep the guess as it was
+        if listed and listed.lower() != profile.org.lower():
+            call = github_rest_caller(fetcher, github_token)
+            return (await research_github(d.company, call, domain=d.domain, org=listed),
+                    "github profile")
+        if site != "":
+            profile.confidence = "low"  # another company's site, or not an org at all
+        return profile, source
+
     async def get_github() -> None:
         org = facts.github if facts and facts.github else None
         source = "wikidata" if org else None
         if not org and site_info:
-            org = _pick_org(site_info.github_orgs, d.company, d.domain)
+            try:
+                org = await _pick_org(site_info.github_orgs, d.company, d.domain, fetcher,
+                                      github_token)
+            except Exception:
+                org = None
             source = "website" if org else None
         call = github_rest_caller(fetcher, github_token)
         try:
             profile = await research_github(d.company, call, domain=d.domain, org=org)
-            if (profile is None or profile.confidence != "high") and not org and d.domain:
-                # A guessed org may be a namesake (Pleo's is pleo-io, not
-                # pleo): prefer the org whose GitHub profile lists the site.
-                listed = await find_org_by_website(fetcher, d.company, d.domain, github_token)
-                if listed:
-                    profile = await research_github(d.company, call, domain=d.domain, org=listed)
-                    source = "github profile"
+            if not org and d.domain and (profile is None or profile.confidence != "high"):
+                profile, source = await _check_guessed_org(profile, source)
         except GitHubRateLimitError as e:
             d.gaps.append(str(e))
             return

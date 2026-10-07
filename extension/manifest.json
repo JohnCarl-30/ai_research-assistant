@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "scout",
   "display_name": "Scout Company Research",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Research any company with no API keys: facts, tech stack, hiring, GitHub activity and red flags.",
   "long_description": "Scout turns Claude into a company researcher that runs on your computer and needs no API keys or accounts. Ask about any company and Scout builds a dossier from public sources: facts from Wikidata (founding year, headcount, headquarters), the tech stack its website runs on, the email and SaaS tools in its DNS records, open roles from its public job board (by team, location and the technologies they mention), its GitHub organisation, and Hacker News discussions of its launches. Claude adds recent news with its own web search and writes a cited brief, saved to a notebook stored only on your machine.",
   "author": {

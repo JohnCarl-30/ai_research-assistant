@@ -3,7 +3,7 @@
 All notable changes to Scout, the company research extension for Claude
 Desktop and plugin for Claude Code.
 
-## Unreleased
+## 0.3.1 (2026-10-07)
 
 ### Fixed
 - A company's main GitHub org is no longer replaced by a side org when its

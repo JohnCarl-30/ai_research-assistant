@@ -28,6 +28,7 @@ def acme_fetcher(**extra) -> FakeFetcher:
         "api.ashbyhq.com/posting-api/job-board/acme-robots": fixture("ashby_linear.json"),
         "search/repositories?q=org%3Aacme-hq": json.dumps(REPOS),
         "repos/acme-hq/core/contents/": "[]",
+        "/orgs/acme-hq": json.dumps({"blog": "https://acme.io"}),
         "hn.algolia.com": json.dumps({"hits": [
             {"title": "Acme launches", "url": "https://acme.io/blog/launch", "points": 120,
              "num_comments": 40, "created_at": "2026-05-01T00:00:00Z", "objectID": "1"}]}),
@@ -235,3 +236,22 @@ async def test_a_rate_limit_while_checking_keeps_the_guess():
                                dns_lookup=fake_dns)
 
     assert (d.github["org"], d.github["confidence"]) == ("acme", "medium")
+
+
+async def test_a_site_link_to_another_companys_org_is_not_taken_for_its_own():
+    # airbnb.com links github.com/newrelic (a vendor); airbnb's org is airbnb.
+    page = """<html><body><a href="https://github.com/newrelic/newrelic-browser-agent">x</a>
+    </body></html>"""
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "https://airbnb.com/": page,
+        "/orgs/newrelic": json.dumps({"blog": "https://newrelic.com"}),
+        "search/repositories?q=org%3Aairbnb": _org_repos("airbnb"),
+        "/orgs/airbnb": json.dumps({"blog": "https://airbnb.io"}),
+    })
+
+    d = await research_company("Airbnb", domain="airbnb.com", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert d.github["org"] == "airbnb"
+    assert d.github["org_source"] != "website"

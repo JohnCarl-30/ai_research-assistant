@@ -13,6 +13,10 @@ Desktop and plugin for Claude Code.
 - A guessed GitHub org that is really a person's account, or whose profile
   names another company's site, is replaced by the org that lists the
   company's site, or marked low confidence if there is none.
+- A GitHub link on a company's site to another company's org (airbnb.com
+  links New Relic's) is no longer taken as the company's own org: a link not
+  named like the company is only trusted if that org's profile lists the
+  company's site.
 
 ### Changed
 - Checking a guessed GitHub org reads its profile first (one request) and

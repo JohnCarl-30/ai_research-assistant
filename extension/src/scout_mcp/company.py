@@ -63,12 +63,29 @@ class Dossier:
         return dict(self.__dict__)
 
 
-def _pick_org(orgs: list[str], company: str, domain: str | None) -> str | None:
-    """The site's GitHub link most like the company, if it links to any."""
-    if not orgs:
-        return None
+async def _pick_org(
+    orgs: list[str], company: str, domain: str | None, fetcher: Fetcher, token: str | None
+) -> str | None:
+    """The site's GitHub link that is the company's own org, if it links to one.
+
+    A link named like the company is trusted. Any other link (a site can link
+    a vendor's or a library's org: airbnb.com links newrelic) is only taken if
+    that org's profile lists a site on the company's name (getsentry for
+    sentry.io). Up to two such links are checked, one request each.
+    """
     slugs = set(candidate_org_slugs(company, domain))
-    return next((o for o in orgs if o.lower() in slugs), orgs[0])
+    if named := next((o for o in orgs if o.lower() in slugs), None):
+        return named
+    if not domain:
+        return orgs[0] if orgs else None
+    for org in orgs[:2]:
+        try:
+            site = await org_website(fetcher, org, token)
+        except Exception:
+            continue  # not an org, or GitHub can't be asked now: not trusted
+        if site and site_name(site) == site_name(domain):
+            return org
+    return None
 
 
 async def research_company(
@@ -220,7 +237,11 @@ async def research_company(
         org = facts.github if facts and facts.github else None
         source = "wikidata" if org else None
         if not org and site_info:
-            org = _pick_org(site_info.github_orgs, d.company, d.domain)
+            try:
+                org = await _pick_org(site_info.github_orgs, d.company, d.domain, fetcher,
+                                      github_token)
+            except Exception:
+                org = None
             source = "website" if org else None
         call = github_rest_caller(fetcher, github_token)
         try:

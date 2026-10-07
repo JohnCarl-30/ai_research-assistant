@@ -95,7 +95,9 @@ reach this time is never reported as "gone".
 - **GitHub without a token:** Scout uses only GitHub's search API (10 searches a
   minute) and reads files from `raw.githubusercontent.com`, which doesn't count
   against GitHub's API quota. A company takes 1 to 4 searches, so you can research
-  several companies a minute, and results are cached for a day. An optional
+  several companies a minute, and results are cached for a day. If the search
+  limit runs out, Scout waits for it to reset (at most a minute) and tries
+  once more, so a quick run of companies is slower rather than incomplete. An optional
   GitHub token in Scout's settings (read-only, public repositories) raises the
   search limit to 30 a minute. It is stored as a secret by Claude, and Scout
   never reads tokens you set in your shell for other tools.

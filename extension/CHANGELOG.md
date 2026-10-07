@@ -19,6 +19,10 @@ Desktop and plugin for Claude Code.
   company's site.
 
 ### Changed
+- When GitHub's search limit (10 a minute without a token) runs out and
+  resets within a minute, Scout waits for it and tries once more instead of
+  leaving GitHub out of the dossier. The hourly limit is still reported, not
+  waited for.
 - Checking a guessed GitHub org reads its profile first (one request) and
   only searches when the profile contradicts the guess, so research uses
   fewer of GitHub's 60 requests an hour.

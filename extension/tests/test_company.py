@@ -163,10 +163,75 @@ async def test_a_namesake_org_guessed_from_the_domain_loses_to_the_listed_one():
         "search/repositories?q=org%3Apleo": repos("pleo"),
         "search/users": json.dumps({"items": [{"login": "pleo"}, {"login": "pleo-io"}]}),
         "/orgs/pleo-io": json.dumps({"blog": "https://www.pleo.io"}),
-        "/orgs/pleo": json.dumps({"blog": "https://pleo.example"}),
+        "/orgs/pleo": (404, "Not Found"),  # "pleo" is a person's account
     })
 
     d = await research_company("Pleo", domain="pleo.io", fetcher=fetcher, notebook=None,
                                dns_lookup=fake_dns)
 
     assert (d.github["org"], d.github["org_source"]) == ("pleo-io", "github profile")
+
+
+def _org_repos(owner):
+    return json.dumps({"items": [{"name": "app", "full_name": f"{owner}/app",
+                                  "language": "Ruby", "owner": {"login": owner},
+                                  "default_branch": "main"}]})
+
+
+async def test_a_guessed_org_listing_the_company_elsewhere_is_kept_in_one_call():
+    # doctolib's profile lists careers.doctolib.com, not doctolib.fr; a side
+    # org (doctolib-lab) lists about.doctolib.fr and must not win.
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "search/repositories?q=org%3Adoctolib": _org_repos("doctolib"),
+        "/orgs/doctolib": json.dumps({"blog": "https://careers.doctolib.com/tech-doctolib/"}),
+        "search/users": json.dumps({"items": [{"login": "doctolib-lab"}]}),
+        "/orgs/doctolib-lab": json.dumps({"blog": "https://about.doctolib.fr/lab/"}),
+    })
+
+    d = await research_company("Doctolib", domain="doctolib.fr", fetcher=fetcher,
+                               notebook=None, dns_lookup=fake_dns)
+
+    assert (d.github["org"], d.github["confidence"]) == ("doctolib", "high")
+    assert not any("search/users" in url for url, _ in fetcher.requests)
+
+
+async def test_a_guessed_org_with_no_website_is_kept_without_a_search():
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "search/repositories?q=org%3Aacme": _org_repos("acme"),
+        "/orgs/acme": json.dumps({"blog": ""}),
+    })
+
+    d = await research_company("Acme", domain="acme.io", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert (d.github["org"], d.github["confidence"]) == ("acme", "medium")
+    assert not any("search/users" in url for url, _ in fetcher.requests)
+
+
+async def test_a_guessed_org_of_another_company_is_marked_low_when_nothing_better():
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "search/repositories?q=org%3Aacme": _org_repos("acme"),
+        "/orgs/acme": json.dumps({"blog": "https://acme-anvils.example"}),
+        "search/users": json.dumps({"items": []}),
+    })
+
+    d = await research_company("Acme", domain="acme.io", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert (d.github["org"], d.github["confidence"]) == ("acme", "low")
+
+
+async def test_a_rate_limit_while_checking_keeps_the_guess():
+    fetcher = FakeFetcher({
+        "list=search": json.dumps({"query": {"search": []}}),
+        "search/repositories?q=org%3Aacme": _org_repos("acme"),
+        "/orgs/acme": (403, "API rate limit exceeded"),
+    })
+
+    d = await research_company("Acme", domain="acme.io", fetcher=fetcher, notebook=None,
+                               dns_lookup=fake_dns)
+
+    assert (d.github["org"], d.github["confidence"]) == ("acme", "medium")

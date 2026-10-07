@@ -88,6 +88,27 @@ async def find_org_by_website(
     return None
 
 
+def site_name(site: str | None) -> str | None:
+    """The name a website is registered under: "careers.doctolib.com" and
+    "www.doctolib.fr" are both "doctolib"; "shop.acme.co.uk" is "acme"."""
+    host = _domain_root(site or "")
+    if not host:
+        return None
+    labels = host.split(".")
+    if len(labels) >= 3 and len(labels[-1]) == 2 and len(labels[-2]) <= 3:
+        return labels[-3]  # acme.co.uk, acme.com.au
+    return labels[-2] if len(labels) >= 2 else None
+
+
+async def org_website(
+    fetcher: Fetcher, login: str, token: str | None = None
+) -> str | None:
+    """The website on a GitHub org's profile ("" if it lists none). One core
+    API call."""
+    profile = json.loads(await _api(fetcher, f"{API}/orgs/{quote(login)}", token))
+    return profile.get("blog") or ""
+
+
 def github_rest_caller(fetcher: Fetcher, token: str | None = None) -> ToolCaller:
     # Default branches seen in search results, so raw URLs name the right one.
     branches: dict[str, str] = {}
